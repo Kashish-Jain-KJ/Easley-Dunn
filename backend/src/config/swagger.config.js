@@ -27,8 +27,8 @@ const options = {
     ],
   },
   // Scan all route files for @swagger JSDoc blocks
-  // apis: ["./src/routes/*.routes.js"]
-  apis: ["./src/routes/googlePlay.routes.js", "./src/routes/bigQuery.routes.js"],
+  apis: ["./src/routes/*.routes.js"]
+  // apis: ["./src/routes/googlePlay.routes.js", "./src/routes/bigQuery.routes.js"],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

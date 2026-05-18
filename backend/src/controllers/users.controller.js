@@ -40,6 +40,7 @@ async function getUserAccess(req, res) {
        usa.external_account_identifier,
        usa.external_user_identifier,
        usa.role_name,
+       usa.is_automate,
        usa.is_active AS access_is_active,
        usa.last_synced_at,
        s.service_id,
