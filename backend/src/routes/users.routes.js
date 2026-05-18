@@ -38,7 +38,7 @@ const router = Router();
  *                       user_id:           { type: integer }
  *                       name:              { type: string }
  *                       email:             { type: string }
- *                       employment_status: { type: string }
+ *                       is_active:         { type: boolean }
  *                       start_date:        { type: string, format: date-time }
  */
 router.get("/", asyncHandler(getUsers));
