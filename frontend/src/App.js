@@ -15,9 +15,11 @@ export default function App() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [manualAccess, setManualAccess] = useState(new Set());
   const [automateAccess, setAutomateAccess] = useState(new Set());
+  const [userAccesses, setUserAccesses] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isAccessLoading, setIsAccessLoading] = useState(false);
+  const [isOffboarding, setIsOffboarding] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -56,16 +58,112 @@ export default function App() {
     setAutomateAccess(newAccess);
   };
 
+  const offboardAccesses = async (accessesToOffboard, isAutomate) => {
+    if (!selectedUser) return;
+    setIsOffboarding(true);
+
+    const results = [];
+    for (const serviceName of accessesToOffboard) {
+      const accessRecord = userAccesses.find(a => a.service?.service_name === serviceName);
+      if (!accessRecord) {
+        results.push({ name: serviceName, success: false, message: "Access record not found" });
+        continue;
+      }
+
+      const serviceCode = accessRecord.service?.service_code;
+      let endpoint = "";
+      if (serviceCode === "GOOGLE_PLAY_CONSOLE") {
+        endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "BIG_QUERY") {
+        endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
+      } else {
+        results.push({ name: serviceName, success: false, message: `No automated endpoint configured for service code ${serviceCode}` });
+        continue;
+      }
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "DELETE"
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          results.push({ name: serviceName, success: true, message: data.message });
+        } else {
+          results.push({ name: serviceName, success: false, message: data.message || "Failed to offboard" });
+        }
+      } catch (err) {
+        results.push({ name: serviceName, success: false, message: err.message || "Network error" });
+      }
+    }
+
+    // Process results
+    const successful = results.filter(r => r.success);
+    const failed = results.filter(r => !r.success);
+
+    if (successful.length > 0) {
+      const successfulNames = successful.map(r => r.name);
+
+      // Update sets
+      if (isAutomate) {
+        const newAutomateAccess = new Set(automateAccess);
+        successfulNames.forEach(name => newAutomateAccess.delete(name));
+        setAutomateAccess(newAutomateAccess);
+      } else {
+        const newManualAccess = new Set(manualAccess);
+        successfulNames.forEach(name => newManualAccess.delete(name));
+        setManualAccess(newManualAccess);
+      }
+
+      // Update selectedUser list to remove offboarded accesses from display
+      setSelectedUser(prev => {
+        if (!prev) return null;
+        if (isAutomate) {
+          return {
+            ...prev,
+            automateAccesses: (prev.automateAccesses || []).filter(name => !successfulNames.includes(name))
+          };
+        } else {
+          return {
+            ...prev,
+            manualAccesses: (prev.manualAccesses || []).filter(name => !successfulNames.includes(name))
+          };
+        }
+      });
+
+      // Update userAccesses state
+      setUserAccesses(prev =>
+        prev.map(a => {
+          if (a.service?.service_name && successfulNames.includes(a.service.service_name)) {
+            return { ...a, is_active: false };
+          }
+          return a;
+        })
+      );
+    }
+
+    // Display summary message
+    let msg = "";
+    if (successful.length > 0) {
+      msg += `Successfully offboarded:\n${successful.map(r => `- ${r.name}`).join("\n")}\n\n`;
+    }
+    if (failed.length > 0) {
+      msg += `Failed to offboard:\n${failed.map(r => `- ${r.name}: ${r.message}`).join("\n")}`;
+    }
+
+    alert(msg.trim());
+    setIsOffboarding(false);
+  };
+
   const handleManualOffboard = () => {
     if (!selectedUser) return;
     const accessToRevoke = Array.from(manualAccess);
-    alert(`Manual offboarding initiated for ${selectedUser.name}\n\nAccess to revoke:\n${accessToRevoke.join("\n")}`);
+    offboardAccesses(accessToRevoke, false);
   };
 
   const handleAutomateOffboard = () => {
     if (!selectedUser) return;
     const accessToRevoke = Array.from(automateAccess);
-    alert(`Automated offboarding initiated for ${selectedUser.name}\n\nAccess to revoke:\n${accessToRevoke.join("\n")}`);
+    offboardAccesses(accessToRevoke, true);
   };
 
   const handleUserSelect = async (user) => {
@@ -73,17 +171,20 @@ export default function App() {
     if (!user.is_active) {
       setManualAccess(new Set());
       setAutomateAccess(new Set());
+      setUserAccesses([]);
       return;
     }
-    
+
     setIsAccessLoading(true);
     try {
       const res = await fetch(`${API_URL}/users/${user.user_id}/access`);
       const json = await res.json();
       if (json.success) {
-        const manualAcc = json.data.filter(item => !item.is_automate).map(item => item.service?.service_name).filter(Boolean);
-        const automateAcc = json.data.filter(item => item.is_automate).map(item => item.service?.service_name).filter(Boolean);
-        
+        setUserAccesses(json.data);
+        const activeAccesses = json.data.filter(item => item.is_active);
+        const manualAcc = activeAccesses.filter(item => !item.is_automate).map(item => item.service?.service_name).filter(Boolean);
+        const automateAcc = activeAccesses.filter(item => item.is_automate).map(item => item.service?.service_name).filter(Boolean);
+
         const updatedUser = { ...user, manualAccesses: manualAcc, automateAccesses: automateAcc };
         setSelectedUser(updatedUser);
         setManualAccess(new Set(manualAcc));
@@ -105,143 +206,157 @@ export default function App() {
   });
 
   return <div className="size-full bg-gray-50 p-8 min-h-screen">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">User Access Management</h1>
-          <p className="mt-2 text-gray-600">Manage user access and offboarding</p>
-        </div>
+    <div className="mx-auto max-w-7xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">User Access Management</h1>
+        <p className="mt-2 text-gray-600">Manage user access and offboarding</p>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Users List */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>All Users</CardTitle>
-                <div className="mt-4 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                  <Input type="text" placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y max-h-[600px] overflow-y-auto">
-                  {isLoading ? (
-                    <div className="p-8 flex justify-center text-gray-500">
-                      <Loader2 className="animate-spin size-6" />
-                    </div>
-                  ) : filteredUsers.length > 0 ? filteredUsers.map(user => <button key={user.user_id} onClick={() => handleUserSelect(user)} className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${selectedUser?.user_id === user.user_id ? "bg-blue-50 border-l-4 border-blue-500" : ""}`}>
-                      <div className="flex items-start gap-3">
-                        <UserCircle className="size-10 text-gray-400 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900 truncate">{user.name}</p>
-                            <Badge className={`text-white ${user.is_active ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"}`}>
-                              {user.is_active ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-600 truncate">{user.email}</p>
-                        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Users List */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>All Users</CardTitle>
+              <div className="mt-4 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                <Input type="text" placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y max-h-[600px] overflow-y-auto">
+                {isLoading ? (
+                  <div className="p-8 flex justify-center text-gray-500">
+                    <Loader2 className="animate-spin size-6" />
+                  </div>
+                ) : filteredUsers.length > 0 ? filteredUsers.map(user => <button key={user.user_id} onClick={() => handleUserSelect(user)} className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${selectedUser?.user_id === user.user_id ? "bg-blue-50 border-l-4 border-blue-500" : ""}`}>
+                  <div className="flex items-start gap-3">
+                    <UserCircle className="size-10 text-gray-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900 truncate">{user.name}</p>
+                        <Badge className={`text-white ${user.is_active ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"}`}>
+                          {user.is_active ? "Active" : "Inactive"}
+                        </Badge>
                       </div>
-                    </button>) : <div className="p-8 text-center text-gray-500">
-                      <p>No users found matching "{searchQuery}"</p>
-                    </div>}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Access Management */}
-          <div className="lg:col-span-2">
-            {selectedUser ? <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <Shield className="size-6 text-blue-600" />
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        Access Control for {selectedUser.name}
-                        {!selectedUser.is_active && (
-                          <Badge className="text-white bg-red-500 hover:bg-red-600">
-                            Inactive
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <p className="text-sm text-gray-600 mt-1">{selectedUser.email}</p>
+                      <p className="text-sm text-gray-600 truncate">{user.email}</p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {selectedUser.is_active ? (
-                    isAccessLoading ? (
-                      <div className="py-16 flex justify-center text-gray-500">
-                        <Loader2 className="animate-spin size-8 text-blue-500" />
+                </button>) : <div className="p-8 text-center text-gray-500">
+                  <p>No users found matching "{searchQuery}"</p>
+                </div>}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Access Management */}
+        <div className="lg:col-span-2">
+          {selectedUser ? <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Shield className="size-6 text-blue-600" />
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    Access Control for {selectedUser.name}
+                    {!selectedUser.is_active && (
+                      <Badge className="text-white bg-red-500 hover:bg-red-600">
+                        Inactive
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">{selectedUser.email}</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {selectedUser.is_active ? (
+                isAccessLoading ? (
+                  <div className="py-16 flex justify-center text-gray-500">
+                    <Loader2 className="animate-spin size-8 text-blue-500" />
+                  </div>
+                ) : (
+                  <Tabs defaultValue="manual" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="manual">Manual</TabsTrigger>
+                      <TabsTrigger value="automate">Automate</TabsTrigger>
+                    </TabsList>
+
+                    {/* Manual Tab */}
+                    <TabsContent value="manual" className="mt-6">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(selectedUser.manualAccesses || []).length > 0 ? (selectedUser.manualAccesses || []).map(access => <div key={access} className="flex items-center space-x-2">
+                            <Checkbox id={`manual-${access}`} checked={manualAccess.has(access)} onCheckedChange={() => handleManualAccessToggle(access)} />
+                            <Label htmlFor={`manual-${access}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
+                              {access}
+                            </Label>
+                          </div>) : <p className="text-gray-500 text-sm py-4">No active permissions found.</p>}
+                        </div>
+
+                        <div className="pt-6 border-t">
+                          <Button onClick={handleManualOffboard} variant="destructive" className="w-full" disabled={manualAccess.size === 0 || isOffboarding}>
+                            {isOffboarding ? (
+                              <>
+                                <Loader2 className="animate-spin mr-2 size-4 inline" />
+                                Offboarding...
+                              </>
+                            ) : (
+                              `Offboard (${manualAccess.size} access${manualAccess.size !== 1 ? "es" : ""} selected)`
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    ) : (
-                      <Tabs defaultValue="manual" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="manual">Manual</TabsTrigger>
-                          <TabsTrigger value="automate">Automate</TabsTrigger>
-                        </TabsList>
+                    </TabsContent>
 
-                        {/* Manual Tab */}
-                        <TabsContent value="manual" className="mt-6">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {(selectedUser.manualAccesses || []).length > 0 ? (selectedUser.manualAccesses || []).map(access => <div key={access} className="flex items-center space-x-2">
-                                  <Checkbox id={`manual-${access}`} checked={manualAccess.has(access)} onCheckedChange={() => handleManualAccessToggle(access)} />
-                                  <Label htmlFor={`manual-${access}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
-                                    {access}
-                                  </Label>
-                                </div>) : <p className="text-gray-500 text-sm py-4">No active permissions found.</p>}
-                            </div>
+                    {/* Automate Tab */}
+                    <TabsContent value="automate" className="mt-6">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(selectedUser.automateAccesses || []).length > 0 ? (selectedUser.automateAccesses || []).map(access => <div key={access} className="flex items-center space-x-2">
+                            <Checkbox id={`automate-${access}`} checked={automateAccess.has(access)} onCheckedChange={() => handleAutomateAccessToggle(access)} />
+                            <Label htmlFor={`automate-${access}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
+                              {access}
+                            </Label>
+                          </div>) : <p className="text-gray-500 text-sm py-4">No active permissions found.</p>}
+                        </div>
 
-                            <div className="pt-6 border-t">
-                              <Button onClick={handleManualOffboard} variant="destructive" className="w-full" disabled={manualAccess.size === 0}>
-                                Offboard ({manualAccess.size} access{manualAccess.size !== 1 ? "es" : ""} selected)
-                              </Button>
-                            </div>
-                          </div>
-                        </TabsContent>
-
-                        {/* Automate Tab */}
-                        <TabsContent value="automate" className="mt-6">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {(selectedUser.automateAccesses || []).length > 0 ? (selectedUser.automateAccesses || []).map(access => <div key={access} className="flex items-center space-x-2">
-                                  <Checkbox id={`automate-${access}`} checked={automateAccess.has(access)} onCheckedChange={() => handleAutomateAccessToggle(access)} />
-                                  <Label htmlFor={`automate-${access}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
-                                    {access}
-                                  </Label>
-                                </div>) : <p className="text-gray-500 text-sm py-4">No active permissions found.</p>}
-                            </div>
-
-                            <div className="pt-6 border-t">
-                              <Button onClick={handleAutomateOffboard} variant="destructive" className="w-full" disabled={automateAccess.size === 0}>
-                                Offboard ({automateAccess.size} access{automateAccess.size !== 1 ? "es" : ""} selected)
-                              </Button>
-                            </div>
-                          </div>
-                        </TabsContent>
-                      </Tabs>
-                    )
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-red-100">
-                        <Shield className="size-8 text-red-600" />
+                        <div className="pt-6 border-t">
+                          <Button onClick={handleAutomateOffboard} variant="destructive" className="w-full" disabled={automateAccess.size === 0 || isOffboarding}>
+                            {isOffboarding ? (
+                              <>
+                                <Loader2 className="animate-spin mr-2 size-4 inline" />
+                                Offboarding...
+                              </>
+                            ) : (
+                              `Offboard (${automateAccess.size} access${automateAccess.size !== 1 ? "es" : ""} selected)`
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                      <h3 className="mb-2 text-xl font-semibold text-gray-900">User is Inactive</h3>
-                      <p className="max-w-md text-gray-500">
-                        This user has been deactivated and does not have any active access permissions.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card> : <Card className="h-full flex items-center justify-center">
-                <CardContent className="text-center py-12">
-                  <UserCircle className="size-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">Select a user to view and manage their access</p>
-                </CardContent>
-              </Card>}
-          </div>
+                    </TabsContent>
+                  </Tabs>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-red-100">
+                    <Shield className="size-8 text-red-600" />
+                  </div>
+                  <h3 className="mb-2 text-xl font-semibold text-gray-900">User is Inactive</h3>
+                  <p className="max-w-md text-gray-500">
+                    This user has been deactivated and does not have any active access permissions.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card> : <Card className="h-full flex items-center justify-center">
+            <CardContent className="text-center py-12">
+              <UserCircle className="size-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">Select a user to view and manage their access</p>
+            </CardContent>
+          </Card>}
         </div>
       </div>
-    </div>;
+    </div>
+  </div>;
 }

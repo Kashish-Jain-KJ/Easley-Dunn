@@ -46,10 +46,11 @@ async function getCloudResourceManagerClient() {
 async function removeBigQueryUser(req, res) {
   const { userId } = req.params;
 
+  let serviceIdVal = null;
   try {
     // 1. Fetch the user's BigQuery access record from the database
     const { rows: accessRows } = await getPool().query(
-      `SELECT usa.external_account_identifier, usa.external_user_identifier, usa.role_name
+      `SELECT usa.external_account_identifier, usa.external_user_identifier, usa.role_name, usa.service_id
        FROM user_service_access usa
        JOIN services s ON usa.service_id = s.service_id
        WHERE usa.user_id = $1 AND s.service_code = 'BIG_QUERY'`,
@@ -57,15 +58,37 @@ async function removeBigQueryUser(req, res) {
     );
 
     if (accessRows.length === 0) {
+      try {
+        const { rows } = await getPool().query(
+          "SELECT service_id FROM services WHERE service_code = 'BIG_QUERY'"
+        );
+        if (rows.length > 0) serviceIdVal = rows[0].service_id;
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, `BigQuery access record not found for user_id '${userId}'. (Code: 404)`]
+      );
+
       return res.status(404).json({
         success: false,
         message: `BigQuery access record not found for user_id '${userId}'.`,
       });
     }
 
-    const { external_account_identifier, external_user_identifier, role_name } = accessRows[0];
+    const { external_account_identifier, external_user_identifier, role_name, service_id } = accessRows[0];
+    serviceIdVal = service_id;
 
     if (!external_account_identifier || !external_user_identifier) {
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)"]
+      );
+
       return res.status(400).json({
         success: false,
         message: "Missing external_account_identifier (Project ID) or external_user_identifier (Email) in the database.",
@@ -106,6 +129,12 @@ async function removeBigQueryUser(req, res) {
     }
 
     if (!modified) {
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, `User/Role combination not found in IAM policy for project ${external_account_identifier}. (Code: 404)`]
+      );
+
       return res.status(404).json({
         success: false,
         message: `User/Role combination not found in IAM policy for project ${external_account_identifier}.`,
@@ -120,6 +149,21 @@ async function removeBigQueryUser(req, res) {
       requestBody: { policy },
     });
 
+    // Update local DB status to inactive
+    await getPool().query(
+      `UPDATE user_service_access
+       SET is_active = false
+       WHERE user_id = $1 AND service_id = $2`,
+      [userId, serviceIdVal]
+    );
+
+    // Insert success log
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
+      [userId, serviceIdVal]
+    );
+
     console.log(`[BigQuery/IAM] Successfully removed ${external_user_identifier} from ${external_account_identifier}.`);
     
     res.json({
@@ -128,10 +172,32 @@ async function removeBigQueryUser(req, res) {
     });
   } catch (error) {
     console.error("BigQuery API Error:", error);
+
+    if (!serviceIdVal) {
+      try {
+        const { rows } = await getPool().query(
+          "SELECT service_id FROM services WHERE service_code = 'BIG_QUERY'"
+        );
+        if (rows.length > 0) serviceIdVal = rows[0].service_id;
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+    }
+
+    const errCode = error.code || error.status || "500";
+    const errMessage = `${error.message} (Code: ${errCode})`;
+
+    // Insert failure log
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+      [userId, serviceIdVal, errMessage]
+    );
+
     res.status(500).json({
       success: false,
       message: "Failed to remove user via BigQuery API.",
-      error: error.message,
+      error: errMessage,
     });
   }
 }
