@@ -21,7 +21,7 @@ const options = {
     },
     servers: [
       {
-        url: appConfig.apiUrl + appConfig.apiPrefix,
+        url: appConfig.apiUrl,
         description: "API Server",
       },
     ],
