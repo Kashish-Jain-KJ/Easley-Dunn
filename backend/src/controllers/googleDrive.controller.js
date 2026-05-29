@@ -9,6 +9,16 @@
 
 "use strict";
 
+/**
+ * Required local folder:
+ * googledrive_json/
+ *
+ * Place exactly one Google Drive service account JSON file inside:
+ * backend/googledrive_json/
+ *
+ * The JSON file should stay local and should not be committed.
+ */
+
 const { getPool } = require("../db/database");
 const { google } = require("googleapis");
 const path = require("path");

@@ -11,6 +11,12 @@
 
 "use strict";
 
+/**
+ * Required local env:
+ * GOOGLE_SERVICE_ACCOUNT_FILE=./googleanalytics_json/GAtest.json
+ *
+ * The JSON file should stay local and should not be committed.
+ */
 const { getPool } = require("../db/database");
 const { GoogleAuth } = require("google-auth-library");
 const path = require("path");
