@@ -21,14 +21,14 @@ const options = {
     },
     servers: [
       {
-        url: appConfig.apiUrl,
+        url: appConfig.apiUrl + appConfig.apiPrefix,
         description: "API Server",
       },
     ],
   },
   // Scan all route files for @swagger JSDoc blocks
-  apis: ["./src/routes/*.routes.js"]
-  // apis: ["./src/routes/googlePlay.routes.js", "./src/routes/bigQuery.routes.js"],
+  // apis: ["./src/routes/*.routes.js"]
+  apis: ["./src/routes/*.routes.js"],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
