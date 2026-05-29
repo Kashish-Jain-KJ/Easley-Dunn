@@ -238,7 +238,7 @@ async function getDefaultAnalyticsParentResource(pool) {
         AND usa.external_account_identifier IS NOT NULL
       LIMIT 1
     `,
-    [SERVICE_CODE]
+    ['GOOGLE_ANALYTICS']
   );
 
   if (rows.length === 0) {
