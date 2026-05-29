@@ -16,28 +16,17 @@ const { GoogleAuth } = require("google-auth-library");
 const path = require("path");
 const fs = require("fs");
 
-const dbConfig = require("../config/db.config");
-
-const SCHEMA = dbConfig.schema || "easleydunn";
-const SERVICE_CODE = "GOOGLE_ANALYTICS";
-const COMMAND_NAME = "OFFBOARD_USER";
-
+// No SCHEMA variable, loaded dynamically via connection pool schema path
 const GA_SCOPES = [
   "https://www.googleapis.com/auth/analytics.manage.users",
 ];
 
-function getTriggeredBy(req) {
-  return req.user?.email || req.headers["x-triggered-by"] || "system";
-}
-
 /**
- * DELETE /google-analytics-test/users/:userId
+ * DELETE /google-analytics/users/:userId
  */
 async function removeGoogleAnalyticsUser(req, res) {
   const userId = Number.parseInt(req.params.userId, 10);
   const pool = getPool();
-
-  let runId = null;
 
   if (!Number.isInteger(userId)) {
     return res.status(400).json({
@@ -46,204 +35,105 @@ async function removeGoogleAnalyticsUser(req, res) {
     });
   }
 
+  let serviceIdVal = null;
   try {
-    const { rows: serviceRows } = await pool.query(
-      `
-        SELECT service_id, service_code
-        FROM ${SCHEMA}.services
-        WHERE service_code = $1
-          AND is_active = true
-        LIMIT 1
-      `,
-      [SERVICE_CODE]
+    // 1. Fetch user access record
+    const { rows: accessRows } = await pool.query(
+      `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.service_id, u.email
+       FROM user_service_access usa
+       JOIN services s ON usa.service_id = s.service_id
+       JOIN users u ON usa.user_id = u.user_id
+       WHERE usa.user_id = $1 AND s.service_code = 'GOOGLE_ANALYTICS' AND usa.is_active = true`,
+      [userId]
     );
 
-    if (serviceRows.length === 0) {
+    if (accessRows.length === 0) {
+      try {
+        const { rows } = await pool.query(
+          "SELECT service_id FROM services WHERE service_code = 'GOOGLE_ANALYTICS'"
+        );
+        if (rows.length > 0) serviceIdVal = rows[0].service_id;
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+
       await pool.query(
-        `INSERT INTO ${SCHEMA}.log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, NULL, 'OFFBOARD', 'FAILED', 'GOOGLE_ANALYTICS service row not found. (Code: 404)', now())`,
-        [userId]
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, `Active Google Analytics access record not found for user_id '${userId}'. (Code: 404)`]
       );
 
       return res.status(404).json({
         success: false,
-        message: "GOOGLE_ANALYTICS service row not found.",
+        message: `Active Google Analytics access record not found for user_id '${userId}'.`,
       });
     }
 
-    const service = serviceRows[0];
+    const { access_id, external_account_identifier, external_user_identifier, service_id, email } = accessRows[0];
+    serviceIdVal = service_id;
 
-    const { rows: runRows } = await pool.query(
-      `
-        INSERT INTO ${SCHEMA}.command_run (
-          command_name,
-          user_id,
-          service_id,
-          run_status,
-          triggered_by,
-          started_at
-        )
-        VALUES ($1, $2, $3, $4, $5, now())
-        RETURNING run_id
-      `,
-      [
-        COMMAND_NAME,
-        userId,
-        service.service_id,
-        "running",
-        getTriggeredBy(req),
-      ]
-    );
-
-    runId = runRows[0].run_id;
-
-    const stepLogIds = await createPendingSteps(pool, runId, [
-      "Fetch local Google Analytics access record",
-      "Authenticate with Google Analytics service account",
-      "Resolve Google Analytics access binding",
-      "Delete Google Analytics access binding",
-      "Mark local access inactive",
-    ]);
-
-    const { user, accessRecord } = await runLoggedStep(
-      pool,
-      stepLogIds[1],
-      async () => {
-        const { rows } = await pool.query(
-          `
-            SELECT
-              u.user_id,
-              u.email,
-              usa.access_id,
-              usa.external_account_identifier,
-              usa.external_user_identifier,
-              usa.is_active
-            FROM ${SCHEMA}.users u
-            JOIN ${SCHEMA}.user_service_access usa
-              ON u.user_id = usa.user_id
-            JOIN ${SCHEMA}.services s
-              ON usa.service_id = s.service_id
-            WHERE u.user_id = $1
-              AND s.service_code = $2
-              AND usa.is_active = true
-            LIMIT 1
-          `,
-          [userId, SERVICE_CODE]
-        );
-
-        if (rows.length === 0) {
-          throw new Error(
-            `Active Google Analytics access record not found for user_id '${userId}'.`
-          );
-        }
-
-        if (!rows[0].external_account_identifier) {
-          throw new Error(
-            "Missing external_account_identifier. Expected value like accounts/123456789 or properties/123456789."
-          );
-        }
-
-        if (!rows[0].external_user_identifier && !rows[0].email) {
-          throw new Error("Missing external_user_identifier and user email.");
-        }
-
-        return {
-          user: {
-            user_id: rows[0].user_id,
-            email: rows[0].email,
-          },
-          accessRecord: {
-            access_id: rows[0].access_id,
-            external_account_identifier: rows[0].external_account_identifier,
-            external_user_identifier: rows[0].external_user_identifier,
-          },
-        };
-      }
-    );
-
-    const authClient = await runLoggedStep(pool, stepLogIds[2], async () => {
-      return getGoogleAnalyticsClient();
-    });
-
-    const bindingName = await runLoggedStep(pool, stepLogIds[3], async () => {
-      return resolveAccessBindingName(
-        authClient,
-        accessRecord.external_account_identifier,
-        accessRecord.external_user_identifier,
-        user.email
-      );
-    });
-
-    await runLoggedStep(pool, stepLogIds[4], async () => {
-      await deleteAccessBinding(authClient, bindingName);
-      return true;
-    });
-
-    await runLoggedStep(pool, stepLogIds[5], async () => {
+    if (!external_account_identifier) {
       await pool.query(
-        `
-          UPDATE ${SCHEMA}.user_service_access
-          SET is_active = false,
-              last_synced_at = now()
-          WHERE access_id = $1
-        `,
-        [accessRecord.access_id]
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, "Missing external_account_identifier. (Code: 400)"]
       );
 
-      return true;
-    });
+      return res.status(400).json({
+        success: false,
+        message: "Missing external_account_identifier.",
+      });
+    }
 
-    await pool.query(
-      `
-        UPDATE ${SCHEMA}.command_run
-        SET run_status = $1,
-            ended_at = now()
-        WHERE run_id = $2
-      `,
-      ["done", runId]
+    // 2. Authenticate
+    const authClient = await getGoogleAnalyticsClient();
+
+    // 3. Resolve binding name
+    const bindingName = await resolveAccessBindingName(
+      authClient,
+      external_account_identifier,
+      external_user_identifier,
+      email
     );
 
-    // Insert success log
+    // 4. Delete access binding
+    await deleteAccessBinding(authClient, bindingName);
+
+    // 5. Update local DB status to inactive
     await pool.query(
-      `INSERT INTO ${SCHEMA}.log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, now())`,
-      [userId, service.service_id]
+      `UPDATE user_service_access
+       SET is_active = false,
+           last_synced_at = NOW()
+       WHERE access_id = $1`,
+      [access_id]
+    );
+
+    // 6. Insert success log
+    await pool.query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
+      [userId, serviceIdVal]
     );
 
     return res.json({
       success: true,
       message: `Successfully removed Google Analytics access for user_id '${userId}'.`,
-      runId,
       userId,
-      email: user.email,
+      email,
       bindingName,
     });
   } catch (error) {
     console.error("Google Analytics API Error:", error);
 
-    if (runId) {
-      await pool.query(
-        `
-          UPDATE ${SCHEMA}.command_run
-          SET run_status = $1,
-              ended_at = now(),
-              failure_reason = $2
-          WHERE run_id = $3
-        `,
-        ["failed", error.message, runId]
-      );
-    }
-
-    // Try to resolve serviceIdVal
-    let serviceIdVal = null;
-    try {
-      const { rows } = await pool.query(
-        `SELECT service_id FROM ${SCHEMA}.services WHERE service_code = $1 LIMIT 1`,
-        [SERVICE_CODE]
-      );
-      if (rows.length > 0) serviceIdVal = rows[0].service_id;
-    } catch (dbErr) {
-      console.error(dbErr);
+    if (!serviceIdVal) {
+      try {
+        const { rows } = await pool.query(
+          "SELECT service_id FROM services WHERE service_code = 'GOOGLE_ANALYTICS'"
+        );
+        if (rows.length > 0) serviceIdVal = rows[0].service_id;
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
     }
 
     const errCode = error.code || error.status || "500";
@@ -251,15 +141,14 @@ async function removeGoogleAnalyticsUser(req, res) {
 
     // Insert failure log
     await pool.query(
-      `INSERT INTO ${SCHEMA}.log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, now())`,
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
       [userId, serviceIdVal, errMessage]
     );
 
     return res.status(500).json({
       success: false,
       message: "Failed to remove user via Google Analytics Admin API.",
-      runId,
       error: errMessage,
     });
   }
@@ -314,37 +203,21 @@ async function listGoogleAnalyticsAccessBindings(req, res) {
  * Requires:
  * GOOGLE_SERVICE_ACCOUNT_FILE=./googleanalytics_json/GAtest.json
  */
-function getGoogleAnalyticsKeyFilePath() {
-  const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_FILE;
+async function getGoogleAnalyticsClient() {
+  const folderPath = path.join(__dirname, "../../googleanalytics_json");
+  let keyFilePath = null;
+
+  if (fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory()) {
+    const files = fs.readdirSync(folderPath);
+    const jsonFile = files.find((f) => f.endsWith(".json"));
+    if (jsonFile) {
+      keyFilePath = path.join(folderPath, jsonFile);
+    }
+  }
 
   if (!keyFilePath) {
-    throw new Error(
-      "GOOGLE_SERVICE_ACCOUNT_FILE is required for Google Analytics service account testing."
-    );
+    throw new Error("No .json credentials file found inside the googleanalytics_json folder.");
   }
-
-  const resolvedPath = path.resolve(keyFilePath);
-
-  if (!fs.existsSync(resolvedPath)) {
-    throw new Error(
-      `Google Analytics service account JSON not found at: ${resolvedPath}`
-    );
-  }
-
-  const rawJson = fs.readFileSync(resolvedPath, "utf8");
-  const parsedJson = JSON.parse(rawJson);
-
-  if (!parsedJson.client_email || !parsedJson.private_key) {
-    throw new Error(
-      "The file in GOOGLE_SERVICE_ACCOUNT_FILE is not a service account JSON. It must contain client_email and private_key."
-    );
-  }
-
-  return resolvedPath;
-}
-
-async function getGoogleAnalyticsClient() {
-  const keyFilePath = getGoogleAnalyticsKeyFilePath();
 
   const auth = new GoogleAuth({
     keyFile: keyFilePath,
@@ -358,8 +231,8 @@ async function getDefaultAnalyticsParentResource(pool) {
   const { rows } = await pool.query(
     `
       SELECT usa.external_account_identifier
-      FROM ${SCHEMA}.user_service_access usa
-      JOIN ${SCHEMA}.services s
+      FROM user_service_access usa
+      JOIN services s
         ON usa.service_id = s.service_id
       WHERE s.service_code = $1
         AND usa.external_account_identifier IS NOT NULL
@@ -503,72 +376,7 @@ async function deleteAccessBinding(authClient, bindingName) {
   });
 }
 
-async function createPendingSteps(pool, runId, stepNames) {
-  const stepLogIds = {};
 
-  for (let i = 0; i < stepNames.length; i += 1) {
-    const stepNumber = i + 1;
-
-    const { rows } = await pool.query(
-      `
-        INSERT INTO ${SCHEMA}.command_step_log (
-          run_id,
-          step_number,
-          step_name,
-          status
-        )
-        VALUES ($1, $2, $3, $4)
-        RETURNING step_log_id
-      `,
-      [runId, stepNumber, stepNames[i], "pending"]
-    );
-
-    stepLogIds[stepNumber] = rows[0].step_log_id;
-  }
-
-  return stepLogIds;
-}
-
-async function runLoggedStep(pool, stepLogId, action) {
-  await pool.query(
-    `
-      UPDATE ${SCHEMA}.command_step_log
-      SET status = $1,
-          started_at = now()
-      WHERE step_log_id = $2
-    `,
-    ["running", stepLogId]
-  );
-
-  try {
-    const result = await action();
-
-    await pool.query(
-      `
-        UPDATE ${SCHEMA}.command_step_log
-        SET status = $1,
-            ended_at = now()
-        WHERE step_log_id = $2
-      `,
-      ["done", stepLogId]
-    );
-
-    return result;
-  } catch (error) {
-    await pool.query(
-      `
-        UPDATE ${SCHEMA}.command_step_log
-        SET status = $1,
-            ended_at = now(),
-            error_message = $2
-        WHERE step_log_id = $3
-      `,
-      ["failed", error.message, stepLogId]
-    );
-
-    throw error;
-  }
-}
 
 module.exports = {
   removeGoogleAnalyticsUser,

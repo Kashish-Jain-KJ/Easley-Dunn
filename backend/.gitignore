@@ -9,6 +9,8 @@ yarn-error.log*
 .env.*.local
 googleplay_json/
 bigquery_json/
+googledrive_json/
+googleanalytics_json/
 
 # ── Logs ─────────────────────────────────────────────────────
 logs/
