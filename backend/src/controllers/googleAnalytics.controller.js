@@ -14,6 +14,8 @@
 /**
  * Required local env:
  * GOOGLE_SERVICE_ACCOUNT_FILE=./googleanalytics_json/GAtest.json
+ * * Place exactly one Google Appspot service account JSON file inside:
+ * backend/googledrive_json/
  *
  * The JSON file should stay local and should not be committed.
  */
