@@ -118,7 +118,7 @@ async function offboardGoogleDriveUser(req, res) {
 
   // 1. Fetch all active Google Drive access records for this user
   const { rows: accessRows } = await getPool().query(
-    `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier
+    `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.service_id
      FROM user_service_access usa
      JOIN services s ON usa.service_id = s.service_id
      WHERE usa.user_id = $1 AND s.service_code = 'GOOGLE_DRIVE' AND usa.is_active = true`,
@@ -126,6 +126,22 @@ async function offboardGoogleDriveUser(req, res) {
   );
 
   if (accessRows.length === 0) {
+    let serviceIdVal = null;
+    try {
+      const { rows } = await getPool().query(
+        "SELECT service_id FROM services WHERE service_code = 'GOOGLE_DRIVE'"
+      );
+      if (rows.length > 0) serviceIdVal = rows[0].service_id;
+    } catch (dbErr) {
+      console.error(dbErr);
+    }
+
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+      [userId, serviceIdVal, `No active Google Drive access records found for user_id '${userId}'. (Code: 404)`]
+    );
+
     return res.status(404).json({
       success: false,
       message: `No active Google Drive access records found for user_id '${userId}'.`,
@@ -133,12 +149,19 @@ async function offboardGoogleDriveUser(req, res) {
   }
 
   const userEmail = accessRows[0].external_user_identifier;
+  const service_id = accessRows[0].service_id;
   const drive = await getDriveClient();
 
   // 2. Ownership audit — check for files still owned by this user
   const ownedFiles = await auditOwnedFiles(drive, userEmail);
 
   if (ownedFiles.length > 0) {
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+      [userId, service_id, `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`]
+    );
+
     return res.status(409).json({
       success: false,
       message: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. Ownership must be transferred before removal.`,
@@ -165,6 +188,12 @@ async function offboardGoogleDriveUser(req, res) {
 
       if (!permission) {
         results.push({ folderId, status: "not_found — user may have already lost access" });
+
+        await getPool().query(
+          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+           VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+          [userId, service_id, `User permission not found on folder '${folderId}' (already removed or deleted).`]
+        );
         continue;
       }
 
@@ -180,8 +209,25 @@ async function offboardGoogleDriveUser(req, res) {
         [access_id]
       );
 
+      // Insert success log
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
+        [userId, service_id]
+      );
+
       results.push({ folderId, status: "removed" });
     } catch (error) {
+      const errCode = error.code || error.status || "500";
+      const errMessage = `${error.message} (Code: ${errCode})`;
+
+      // Insert failure log
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, service_id, `Folder '${folderId}' deprovisioning failed: ${errMessage}`]
+      );
+
       results.push({ folderId, status: "failed", error: error.message });
     }
   }

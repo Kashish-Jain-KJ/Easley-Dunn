@@ -76,6 +76,10 @@ export default function App() {
         endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
       } else if (serviceCode === "BIG_QUERY") {
         endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "GOOGLE_DRIVE") {
+        endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "GOOGLE_ANALYTICS") {
+        endpoint = `${API_URL}/google-analytics/users/${selectedUser.user_id}`;
       } else {
         results.push({ name: serviceName, success: false, message: `No automated endpoint configured for service code ${serviceCode}` });
         continue;

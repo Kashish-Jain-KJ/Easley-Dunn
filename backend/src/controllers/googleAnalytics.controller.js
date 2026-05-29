@@ -16,7 +16,9 @@ const { GoogleAuth } = require("google-auth-library");
 const path = require("path");
 const fs = require("fs");
 
-const SCHEMA = "easleydunn";
+const dbConfig = require("../config/db.config");
+
+const SCHEMA = dbConfig.schema || "easleydunn";
 const SERVICE_CODE = "GOOGLE_ANALYTICS";
 const COMMAND_NAME = "OFFBOARD_USER";
 
@@ -57,6 +59,12 @@ async function removeGoogleAnalyticsUser(req, res) {
     );
 
     if (serviceRows.length === 0) {
+      await pool.query(
+        `INSERT INTO ${SCHEMA}.log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, NULL, 'OFFBOARD', 'FAILED', 'GOOGLE_ANALYTICS service row not found. (Code: 404)', now())`,
+        [userId]
+      );
+
       return res.status(404).json({
         success: false,
         message: "GOOGLE_ANALYTICS service row not found.",
@@ -195,6 +203,13 @@ async function removeGoogleAnalyticsUser(req, res) {
       ["done", runId]
     );
 
+    // Insert success log
+    await pool.query(
+      `INSERT INTO ${SCHEMA}.log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, now())`,
+      [userId, service.service_id]
+    );
+
     return res.json({
       success: true,
       message: `Successfully removed Google Analytics access for user_id '${userId}'.`,
@@ -219,11 +234,33 @@ async function removeGoogleAnalyticsUser(req, res) {
       );
     }
 
+    // Try to resolve serviceIdVal
+    let serviceIdVal = null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT service_id FROM ${SCHEMA}.services WHERE service_code = $1 LIMIT 1`,
+        [SERVICE_CODE]
+      );
+      if (rows.length > 0) serviceIdVal = rows[0].service_id;
+    } catch (dbErr) {
+      console.error(dbErr);
+    }
+
+    const errCode = error.code || error.status || "500";
+    const errMessage = `${error.message} (Code: ${errCode})`;
+
+    // Insert failure log
+    await pool.query(
+      `INSERT INTO ${SCHEMA}.log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, now())`,
+      [userId, serviceIdVal, errMessage]
+    );
+
     return res.status(500).json({
       success: false,
       message: "Failed to remove user via Google Analytics Admin API.",
       runId,
-      error: error.message,
+      error: errMessage,
     });
   }
 }
