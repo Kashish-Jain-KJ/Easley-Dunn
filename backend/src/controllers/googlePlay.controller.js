@@ -143,6 +143,131 @@ async function listGooglePlayUsers(req, res) {
 }
 
 /**
+ * POST /google-play/users/:userId
+ * Onboards a user to Google Play Developer Console using their email from the local DB.
+ */
+async function onboardGooglePlayUser(req, res) {
+  const { userId } = req.params;
+  const developerId = process.env.GOOGLE_PLAY_DEVELOPERID;
+
+  if (!developerId) {
+    return res.status(500).json({
+      success: false,
+      message: "GOOGLE_PLAY_DEVELOPERID is not configured in the environment.",
+    });
+  }
+
+  const userIdInt = Number.parseInt(userId, 10);
+  if (!Number.isInteger(userIdInt)) {
+    return res.status(400).json({
+      success: false,
+      message: "userId must be an integer.",
+    });
+  }
+
+  const pool = getPool();
+  let serviceIdVal = null;
+  let userEmail = null;
+
+  try {
+    // 1. Fetch service_id for GOOGLE_PLAY_CONSOLE
+    const { rows: serviceRows } = await pool.query(
+      "SELECT service_id FROM services WHERE service_code = 'GOOGLE_PLAY_CONSOLE'"
+    );
+    if (serviceRows.length > 0) {
+      serviceIdVal = serviceRows[0].service_id;
+    }
+
+    // 2. Fetch the user's email from the database
+    const { rows: userRows } = await pool.query(
+      "SELECT email FROM users WHERE user_id = $1",
+      [userIdInt]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `User not found with user_id '${userIdInt}'.`,
+      });
+    }
+
+    userEmail = userRows[0].email;
+
+    // 3. Authenticate and call the users.create API using email and the minimum required permission
+    const androidpublisher = await getGooglePlayClient();
+    const parent = `developers/${developerId}`;
+
+    const response = await androidpublisher.users.create({
+      parent,
+      requestBody: { 
+        email: userEmail,
+        developerAccountPermissions: ["CAN_VIEW_NON_FINANCIAL_DATA_GLOBAL"]
+      },
+    });
+
+    // 4. Update / Insert user_service_access record
+    if (serviceIdVal) {
+      const { rows: accessRows } = await pool.query(
+        `SELECT access_id 
+         FROM user_service_access 
+         WHERE user_id = $1 AND service_id = $2 AND external_account_identifier = $3`,
+        [userIdInt, serviceIdVal, developerId]
+      );
+
+      if (accessRows.length > 0) {
+        await pool.query(
+          `UPDATE user_service_access
+           SET is_active = true,
+               external_user_identifier = $1,
+               last_synced_at = NOW()
+           WHERE access_id = $2`,
+          [userEmail, accessRows[0].access_id]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO user_service_access (user_id, service_id, external_account_identifier, external_user_identifier, is_active, last_synced_at)
+           VALUES ($1, $2, $3, $4, true, NOW())`,
+          [userIdInt, serviceIdVal, developerId, userEmail]
+        );
+      }
+
+      // 5. Insert success log
+      await pool.query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
+         [userIdInt, serviceIdVal]
+      );
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully onboarded user ${userEmail} to Google Play Developer Console.`,
+      data: response.data,
+    });
+  } catch (error) {
+    console.error("Google Play API Error:", error);
+
+    const errCode = error.code || error.status || "500";
+    const errMessage = `${error.message} (Code: ${errCode})`;
+
+    if (serviceIdVal) {
+      // Insert failure log
+      await pool.query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+        [userIdInt, serviceIdVal, errMessage]
+      );
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to onboard user via Google Play API.",
+      error: errMessage,
+    });
+  }
+}
+
+/**
  * Helper function to instantiate an authenticated androidpublisher client.
  */
 async function getGooglePlayClient() {
@@ -169,4 +294,4 @@ async function getGooglePlayClient() {
   return google.androidpublisher({ version: "v3", auth });
 }
 
-module.exports = { removeGooglePlayUser, listGooglePlayUsers };
+module.exports = { removeGooglePlayUser, listGooglePlayUsers, onboardGooglePlayUser };

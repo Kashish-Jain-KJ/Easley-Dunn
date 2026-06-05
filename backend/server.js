@@ -28,7 +28,7 @@ const logger = require("./src/utils/logger");
       logger.info(
         `🚀  Server running in ${appConfig.nodeEnv} mode on port ${appConfig.port}`
       );
-      logger.info(`📡  API available at ${appConfig.apiUrl}${appConfig.apiPrefix}`);
+      logger.info(`📡  API available at ${appConfig.apiUrl}`);
     });
 
     // ─── Graceful shutdown ──────────────────────────────────────────────────

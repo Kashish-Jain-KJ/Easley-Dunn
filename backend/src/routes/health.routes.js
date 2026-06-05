@@ -31,7 +31,7 @@ router.get(
 router.get(
   "/db",
   asyncHandler(async (_req, res) => {
-    const [rows] = await getPool().query("SELECT 1 AS ok");
+    const { rows } = await getPool().query("SELECT 1 AS ok");
     res.json({
       success: true,
       database: rows[0].ok === 1 ? "connected" : "error",

@@ -9,7 +9,7 @@
 
 const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
-const { removeGooglePlayUser, listGooglePlayUsers } = require("../controllers/googlePlay.controller");
+const { removeGooglePlayUser, listGooglePlayUsers, onboardGooglePlayUser } = require("../controllers/googlePlay.controller");
 
 const router = Router();
 
@@ -36,6 +36,30 @@ const router = Router();
  *         description: Google Play API request failed or credentials file is missing.
  */
 router.delete("/users/:userId", asyncHandler(removeGooglePlayUser));
+
+/**
+ * @swagger
+ * /google-play/users/{userId}:
+ *   post:
+ *     summary: Onboard a user to Google Play Developer Console
+ *     tags: [GooglePlay]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: The user's primary key from the local users table
+ *     responses:
+ *       201:
+ *         description: Successfully onboarded the user.
+ *       400:
+ *         description: Invalid input or missing fields.
+ *       404:
+ *         description: User not found in local database.
+ *       500:
+ *         description: Google Play API request failed or credentials file is missing.
+ */
+router.post("/users/:userId", asyncHandler(onboardGooglePlayUser));
 
 /*
  * @swagger

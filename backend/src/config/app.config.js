@@ -24,9 +24,6 @@ const appConfig = {
   // Logging
   logLevel: process.env.LOG_LEVEL || "info",
 
-  // API versioning prefix
-  apiPrefix: process.env.API_PREFIX || "/",
-
   // API base URL for docs and logs
   apiUrl: process.env.API_URL || `http://localhost:${process.env.PORT || 5000}`,
 };

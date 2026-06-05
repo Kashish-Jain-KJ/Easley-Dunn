@@ -64,7 +64,7 @@ app.use(
 app.get("/", (_req, res) => res.redirect("/docs"));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use(appConfig.apiPrefix, indexRouter);
+app.use("/", indexRouter);
 
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

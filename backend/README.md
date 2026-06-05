@@ -67,7 +67,6 @@ Key variables:
 | `DB_SCHEMA` | `easleydunn` | PostgreSQL schema name |
 | `DB_CONNECTION_LIMIT` | `10` | Maximum pool connections |
 | `API_URL` | `http://localhost:5000` | Base URL for Swagger and logging |
-| `API_PREFIX` | `/api/v1` | Prefix for your API routes |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed origins (comma-separated) |
 
 ---
@@ -112,8 +111,8 @@ backend/
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/health` | Liveness probe |
-| `GET` | `/api/v1/health/db` | Readiness probe (tests DB) |
+| `GET` | `/health` | Liveness probe |
+| `GET` | `/health/db` | Readiness probe (tests DB) |
 
 *(See `/api-docs` for full interactive documentation of all other endpoints!)*
 
