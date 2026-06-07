@@ -2,7 +2,7 @@
  * @file googleDrive.controller.js
  * @description Request handlers for Google Drive integrations.
  *
- * POST /google-drive/users/:userId/onboard  → grant a user access to their mapped Drive folders
+ * POST /google-drive/users/:userId          → grant a user access to their mapped Drive folders
  * DELETE /google-drive/users/:userId        → remove a user's access from all their Drive folders
  * GET /google-drive/users/:userId/audit     → list all files/folders still owned by the user
  */
@@ -47,7 +47,7 @@ async function getDriveClient() {
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 /**
- * POST /google-drive/users/:userId/onboard
+ * POST /google-drive/users/:userId
  * Grants a user access to all Drive folders mapped to them in user_service_access.
  * The external_account_identifier stores the folder ID.
  * The external_user_identifier stores the user's email.

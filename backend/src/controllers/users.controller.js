@@ -70,4 +70,97 @@ async function getUserAccess(req, res) {
   });
 }
 
-module.exports = { getUsers, getUserAccess };
+/**
+ * POST /users/:userId/access/:accessId/onboard
+ * Manually updates user_service_access row to set is_active = true.
+ */
+async function onboardUserAccess(req, res) {
+  const { userId, accessId } = req.params;
+
+  // Verify access record exists
+  const { rows } = await getPool().query(
+    `SELECT usa.access_id, usa.service_id, s.service_name 
+     FROM user_service_access usa
+     LEFT JOIN services s ON s.service_id = usa.service_id
+     WHERE usa.access_id = $1 AND usa.user_id = $2`,
+    [accessId, userId]
+  );
+
+  if (rows.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: `User service access record not found for user_id '${userId}' and access_id '${accessId}'.`
+    });
+  }
+
+  const { service_id, service_name } = rows[0];
+
+  // Update access record to active
+  await getPool().query(
+    `UPDATE user_service_access 
+     SET is_active = true, last_synced_at = NOW() 
+     WHERE access_id = $1`,
+    [accessId]
+  );
+
+  // Log to log table
+  await getPool().query(
+    `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+     VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
+    [userId, service_id]
+  );
+
+  res.json({
+    success: true,
+    message: `Successfully manually onboarded service '${service_name}' for user_id '${userId}'.`
+  });
+}
+
+/**
+ * POST /users/:userId/access/:accessId/offboard
+ * Manually updates user_service_access row to set is_active = false.
+ */
+async function offboardUserAccess(req, res) {
+  const { userId, accessId } = req.params;
+
+  // Verify access record exists
+  const { rows } = await getPool().query(
+    `SELECT usa.access_id, usa.service_id, s.service_name 
+     FROM user_service_access usa
+     LEFT JOIN services s ON s.service_id = usa.service_id
+     WHERE usa.access_id = $1 AND usa.user_id = $2`,
+    [accessId, userId]
+  );
+
+  if (rows.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: `User service access record not found for user_id '${userId}' and access_id '${accessId}'.`
+    });
+  }
+
+  const { service_id, service_name } = rows[0];
+
+  // Update access record to inactive
+  await getPool().query(
+    `UPDATE user_service_access 
+     SET is_active = false, last_synced_at = NOW() 
+     WHERE access_id = $1`,
+    [accessId]
+  );
+
+  // Log to log table
+  await getPool().query(
+    `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+     VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
+    [userId, service_id]
+  );
+
+  res.json({
+    success: true,
+    message: `Successfully manually offboarded service '${service_name}' for user_id '${userId}'.`
+  });
+}
+
+module.exports = { getUsers, getUserAccess, onboardUserAccess, offboardUserAccess };
+

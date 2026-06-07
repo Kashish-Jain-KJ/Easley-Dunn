@@ -19,25 +19,26 @@ const {
 
 const router = Router();
 
-// /**
-//  * @swagger
-//  * /google-drive/users/{userId}/onboard:
-//  *   post:
-//  *     summary: Grant a user access to their mapped Google Drive folders
-//  *     tags: [Google Drive]
-//  *     parameters:
-//  *       - in: path
-//  *         name: userId
-//  *         required: true
-//  *         schema:
-//  *           type: integer
-//  *     responses:
-//  *       200:
-//  *         description: Onboarding complete
-//  *       404:
-//  *         description: No inactive access records found
-//  */
-// router.post("/users/:userId/onboard", asyncHandler(onboardGoogleDriveUser));
+/**
+ * @swagger
+ * /google-drive/users/{userId}:
+ *   post:
+ *     summary: Grant a user access to their mapped Google Drive folders
+ *     tags: [Google Drive]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Onboarding complete
+ *       404:
+ *         description: No inactive access records found
+ */
+router.post("/users/:userId", asyncHandler(onboardGoogleDriveUser));
+
 
 /**
  * @swagger

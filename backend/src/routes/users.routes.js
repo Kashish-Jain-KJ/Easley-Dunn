@@ -10,7 +10,7 @@
 
 const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
-const { getUsers, getUserAccess } = require("../controllers/users.controller");
+const { getUsers, getUserAccess, onboardUserAccess, offboardUserAccess } = require("../controllers/users.controller");
 
 const router = Router();
 
@@ -83,5 +83,8 @@ router.get("/", asyncHandler(getUsers));
  *         description: User not found.
  */
 router.get("/:userId/access", asyncHandler(getUserAccess));
+router.post("/:userId/access/:accessId/onboard", asyncHandler(onboardUserAccess));
+router.post("/:userId/access/:accessId/offboard", asyncHandler(offboardUserAccess));
 
 module.exports = router;
+
