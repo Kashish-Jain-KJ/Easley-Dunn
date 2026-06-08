@@ -202,4 +202,182 @@ async function removeBigQueryUser(req, res) {
   }
 }
 
-module.exports = { removeBigQueryUser, getCloudResourceManagerClient };
+/**
+ * POST /bigquery/users/:userId
+ * Onboards a user to BigQuery using project IAM policy.
+ */
+async function onboardBigQueryUser(req, res) {
+  const { userId } = req.params;
+
+  let serviceIdVal = null;
+  try {
+    // 1. Fetch the user's inactive BigQuery access records
+    const { rows: accessRows } = await getPool().query(
+      `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.role_name, usa.service_id
+       FROM user_service_access usa
+       JOIN services s ON usa.service_id = s.service_id
+       WHERE usa.user_id = $1 AND s.service_code = 'BIG_QUERY' AND usa.is_active = false`,
+      [userId]
+    );
+
+    if (accessRows.length === 0) {
+      try {
+        const { rows } = await getPool().query(
+          "SELECT service_id FROM services WHERE service_code = 'BIG_QUERY'"
+        );
+        if (rows.length > 0) serviceIdVal = rows[0].service_id;
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, `No inactive BigQuery access records found for user_id '${userId}'. (Code: 404)`]
+      );
+
+      return res.status(404).json({
+        success: false,
+        message: `No inactive BigQuery access records found for user_id '${userId}'.`,
+      });
+    }
+
+    // Authenticate with Google Cloud Resource Manager
+    const crm = await getCloudResourceManagerClient();
+    const results = [];
+
+    for (const row of accessRows) {
+      const { access_id, external_account_identifier, external_user_identifier, role_name, service_id } = row;
+      serviceIdVal = service_id;
+
+      if (!external_account_identifier || !external_user_identifier) {
+        const errMessage = "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)";
+        await getPool().query(
+          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+          [userId, serviceIdVal, errMessage]
+        );
+        results.push({ access_id, status: "failed", error: "Missing Project ID or Email" });
+        continue;
+      }
+
+      try {
+        const resource = `projects/${external_account_identifier}`;
+
+        // Get current IAM policy
+        const { data: policy } = await crm.projects.getIamPolicy({
+          resource,
+          requestBody: {},
+        });
+
+        const memberToAdd = `user:${external_user_identifier}`;
+        const targetRole = "roles/viewer";
+        
+        if (!policy.bindings) {
+          policy.bindings = [];
+        }
+
+        // Find existing binding for this role
+        let binding = policy.bindings.find(b => b.role === targetRole);
+        if (binding) {
+          if (!binding.members) {
+            binding.members = [];
+          }
+          if (!binding.members.includes(memberToAdd)) {
+            binding.members.push(memberToAdd);
+          }
+        } else {
+          policy.bindings.push({
+            role: targetRole,
+            members: [memberToAdd]
+          });
+        }
+
+        // Set the updated IAM policy
+        await crm.projects.setIamPolicy({
+          resource,
+          requestBody: { policy },
+        });
+
+        // Update local DB status to active
+        await getPool().query(
+          `UPDATE user_service_access
+           SET is_active = true, last_synced_at = NOW()
+           WHERE access_id = $1`,
+          [access_id]
+        );
+
+        // Insert success log
+        await getPool().query(
+          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+           VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
+          [userId, serviceIdVal]
+        );
+
+        console.log(`[BigQuery/IAM] Successfully added ${external_user_identifier} to ${external_account_identifier} with role ${targetRole}.`);
+        results.push({ access_id, project: external_account_identifier, role: targetRole, status: "onboarded" });
+      } catch (error) {
+        console.error("BigQuery API Error for row:", error);
+        const errCode = error.code || error.status || "500";
+        const errMessage = `${error.message} (Code: ${errCode})`;
+
+        // Insert failure log
+        await getPool().query(
+          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+          [userId, serviceIdVal, errMessage]
+        );
+
+        results.push({ access_id, project: external_account_identifier, status: "failed", error: errMessage });
+      }
+    }
+
+    // Check if all failed or any succeeded
+    const successCount = results.filter(r => r.status === "onboarded").length;
+    if (successCount === 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to onboard user to any BigQuery projects.",
+        data: results
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully onboarded user to ${successCount} BigQuery project(s).`,
+      data: results
+    });
+
+  } catch (error) {
+    console.error("BigQuery API Error overall:", error);
+
+    if (!serviceIdVal) {
+      try {
+        const { rows } = await getPool().query(
+          "SELECT service_id FROM services WHERE service_code = 'BIG_QUERY'"
+        );
+        if (rows.length > 0) serviceIdVal = rows[0].service_id;
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+    }
+
+    const errCode = error.code || error.status || "500";
+    const errMessage = `${error.message} (Code: ${errCode})`;
+
+    // Insert overall failure log if applicable
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+      [userId, serviceIdVal, errMessage]
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to onboard user via BigQuery API.",
+      error: errMessage,
+    });
+  }
+}
+
+module.exports = { removeBigQueryUser, onboardBigQueryUser, getCloudResourceManagerClient };

@@ -228,6 +228,8 @@ export default function App() {
           endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
         } else if (serviceCode === "GOOGLE_DRIVE") {
           endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
+        } else if (serviceCode === "BIG_QUERY") {
+          endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
         } else {
           // Fallback to manual/generic endpoint for automated services
           endpoint = `${API_URL}/users/${selectedUser.user_id}/access/${accessId}/onboard`;
