@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Input } from "./components/ui/input";
 import {
-  UserCircle,
   Search,
   Loader2,
   UserPlus,
@@ -23,7 +22,6 @@ import {
   Users,
   XCircle
 } from "lucide-react";
-import { Badge } from "./components/ui/badge";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
 
@@ -670,7 +668,7 @@ export default function App() {
         </div>
 
         {/* Selected User Info & All Users List (Middle Column) */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 flex flex-col gap-6">
           {selectedUser && (
             <Card className="relative overflow-hidden border border-gray-200/80 shadow-md rounded-3xl bg-white p-6">
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-cyan-500 to-indigo-500" />
