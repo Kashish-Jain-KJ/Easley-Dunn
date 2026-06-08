@@ -3,12 +3,44 @@ import { Button } from "./components/ui/button";
 import { Checkbox } from "./components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Label } from "./components/ui/label";
 import { Input } from "./components/ui/input";
-import { UserCircle, Search, Loader2, UserPlus, UserMinus } from "lucide-react";
+import {
+  UserCircle,
+  Search,
+  Loader2,
+  UserPlus,
+  UserMinus,
+  Shield,
+  Play,
+  Database,
+  BarChart2,
+  Mail,
+  Bolt,
+  Lock,
+  Calendar,
+  FileText,
+  X
+} from "lucide-react";
 import { Badge } from "./components/ui/badge";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
+
+const getServiceIcon = (serviceCode, serviceName) => {
+  const code = serviceCode?.toUpperCase() || "";
+  const name = serviceName?.toLowerCase() || "";
+
+  if (code.includes("PLAY") || name.includes("play")) return Play;
+  if (code.includes("BIG_QUERY") || code.includes("BIGQUERY") || name.includes("bigquery") || name.includes("big query") || name.includes("database")) return Database;
+  if (code.includes("DRIVE") || name.includes("drive")) return Shield;
+  if (code.includes("ANALYTICS") || name.includes("analytics")) return BarChart2;
+  if (name.includes("email") || name.includes("mail")) return Mail;
+  if (name.includes("slack")) return Bolt;
+  if (name.includes("github") || name.includes("organization") || name.includes("vpn") || name.includes("access")) return Lock;
+  if (name.includes("calendar")) return Calendar;
+  if (name.includes("confluence") || name.includes("jira") || name.includes("wiki")) return FileText;
+
+  return Shield;
+};
 
 
 
@@ -26,6 +58,22 @@ export default function App() {
   const [isAccessLoading, setIsAccessLoading] = useState(false);
   const [isOffboarding, setIsOffboarding] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: "onboard",
+    isAutomate: false,
+    permissions: [],
+    userName: ""
+  });
+
+  const showToast = (toast) => {
+    const id = Date.now() + Math.random().toString(36).substr(2, 9);
+    setToasts(prev => [...prev, { ...toast, id }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000);
+  };
 
   const handleOnboardManualToggle = access => {
     const newAccess = new Set(onboardManualAccess);
@@ -138,7 +186,6 @@ export default function App() {
 
     // Process results
     const successful = results.filter(r => r.success);
-    const failed = results.filter(r => !r.success);
 
     if (successful.length > 0) {
       const successfulNames = successful.map(r => r.name);
@@ -181,29 +228,46 @@ export default function App() {
       );
     }
 
-    // Display summary message
-    let msg = "";
-    if (successful.length > 0) {
-      msg += `Successfully offboarded:\n${successful.map(r => `- ${r.name}`).join("\n")}\n\n`;
-    }
-    if (failed.length > 0) {
-      msg += `Failed to offboard:\n${failed.map(r => `- ${r.name}: ${r.message}`).join("\n")}`;
-    }
+    results.forEach(result => {
+      const title = result.success
+        ? `${result.name} Permission successfully revoked from ${selectedUser.name}`
+        : `Failed to revoke "${result.name}" Permission from ${selectedUser.name}`;
+      const subtitle = result.success
+        ? `${isAutomate ? "Automated" : "Manual"} offboarding complete`
+        : `Error: ${result.message || "Request failed"}`;
+      showToast({
+        type: "offboard",
+        isAutomate,
+        success: result.success,
+        title,
+        subtitle,
+        details: []
+      });
+    });
 
-    alert(msg.trim());
     setIsOffboarding(false);
   };
 
   const handleManualOffboard = () => {
-    if (!selectedUser) return;
-    const accessToRevoke = Array.from(manualAccess);
-    offboardAccesses(accessToRevoke, false);
+    if (!selectedUser || manualAccess.size === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      type: "offboard",
+      isAutomate: false,
+      permissions: Array.from(manualAccess),
+      userName: selectedUser.name
+    });
   };
 
   const handleAutomateOffboard = () => {
-    if (!selectedUser) return;
-    const accessToRevoke = Array.from(automateAccess);
-    offboardAccesses(accessToRevoke, true);
+    if (!selectedUser || automateAccess.size === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      type: "offboard",
+      isAutomate: true,
+      permissions: Array.from(automateAccess),
+      userName: selectedUser.name
+    });
   };
 
   const onboardAccesses = async (accessesToOnboard, isAutomate) => {
@@ -259,7 +323,6 @@ export default function App() {
 
     // Process results
     const successful = results.filter(r => r.success);
-    const failed = results.filter(r => !r.success);
 
     if (successful.length > 0) {
       const successfulNames = successful.map(r => r.name);
@@ -297,27 +360,46 @@ export default function App() {
       );
     }
 
-    // Display summary message
-    let msg = "";
-    if (successful.length > 0) {
-      msg += `Successfully onboarded:\n${successful.map(r => `- ${r.name}`).join("\n")}\n\n`;
-    }
-    if (failed.length > 0) {
-      msg += `Failed to onboard:\n${failed.map(r => `- ${r.name}: ${r.message}`).join("\n")}`;
-    }
+    results.forEach(result => {
+      const title = result.success
+        ? `${result.name} Permission successfully granted to ${selectedUser.name}`
+        : `Failed to grant "${result.name}" Permission to ${selectedUser.name}`;
+      const subtitle = result.success
+        ? `${isAutomate ? "Automated" : "Manual"} onboarding complete`
+        : `Error: ${result.message || "Request failed"}`;
+      showToast({
+        type: "onboard",
+        isAutomate,
+        success: result.success,
+        title,
+        subtitle,
+        details: []
+      });
+    });
 
-    alert(msg.trim());
     setIsOnboarding(false);
   };
 
   const handleOnboardManual = () => {
-    if (!selectedUser) return;
-    onboardAccesses(Array.from(onboardManualAccess), false);
+    if (!selectedUser || onboardManualAccess.size === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      type: "onboard",
+      isAutomate: false,
+      permissions: Array.from(onboardManualAccess),
+      userName: selectedUser.name
+    });
   };
 
   const handleOnboardAutomate = () => {
-    if (!selectedUser) return;
-    onboardAccesses(Array.from(onboardAutomateAccess), true);
+    if (!selectedUser || onboardAutomateAccess.size === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      type: "onboard",
+      isAutomate: true,
+      permissions: Array.from(onboardAutomateAccess),
+      userName: selectedUser.name
+    });
   };
 
   const handleUserSelect = async (user) => {
@@ -373,122 +455,153 @@ export default function App() {
         {/* Onboard Access (Left Column) */}
         <div className="lg:col-span-1">
           {selectedUser ? (
-            <Card className="flex flex-col h-full border-t-4 border-green-500">
-              <CardHeader className="bg-green-50/30 border-b border-green-100/50 pb-4">
-                <div className="flex items-center gap-3">
-                  <UserPlus className="size-6 text-green-600" />
-                  <CardTitle className="text-green-800 font-semibold text-lg">
-                    Onboard Access
-                  </CardTitle>
+            <Card className="flex flex-col h-full border border-gray-200/80 shadow-md rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-[#f2faf5] border-b border-[#e2f0e8] pb-5 pt-6 px-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-[#e6f6ee] rounded-2xl text-[#10a353] flex items-center justify-center shadow-xs">
+                    <UserPlus className="size-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg leading-tight">Onboard Access</h3>
+                    <p className="text-xs text-gray-500 font-medium mt-0.5">Grant new permissions</p>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 px-6 flex-1 flex flex-col">
                 {isAccessLoading ? (
-                  <div className="py-16 flex justify-center text-gray-500">
-                    <Loader2 className="animate-spin size-8 text-green-500" />
+                  <div className="py-24 flex justify-center text-gray-500 flex-1 items-center">
+                    <Loader2 className="animate-spin size-10 text-[#10a353]" />
                   </div>
                 ) : (
-                  <Tabs defaultValue="manual" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="manual">Manual</TabsTrigger>
-                      <TabsTrigger value="automate">Automate</TabsTrigger>
+                  <Tabs defaultValue="manual" className="w-full flex-1 flex flex-col">
+                    <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] p-1 rounded-2xl h-12">
+                      <TabsTrigger value="manual" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Manual</TabsTrigger>
+                      <TabsTrigger value="automate" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Automate</TabsTrigger>
                     </TabsList>
 
                     {/* Onboard Manual Tab */}
-                    <TabsContent value="manual" className="mt-6">
-                      <div className="space-y-4">
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    <TabsContent value="manual" className="mt-4 flex-grow flex flex-col justify-between">
+                      <div>
+                        <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
+                        <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
                           {userAccesses.filter(a => !a.is_active && !a.is_automate).length > 0 ? (
                             userAccesses
                               .filter(a => !a.is_active && !a.is_automate)
                               .map(access => {
                                 const name = access.service?.service_name || "Unknown Service";
+                                const code = access.service?.service_code || "";
+                                const isSelected = onboardManualAccess.has(name);
+                                const IconComponent = getServiceIcon(code, name);
                                 return (
-                                  <div key={access.access_id} className="flex items-center space-x-2">
+                                  <div
+                                    key={access.access_id}
+                                    onClick={() => handleOnboardManualToggle(name)}
+                                    className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
+                                      ? "bg-[#e8f8f0] border-[#a3e2bc] text-[#0d592f]"
+                                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                                      }`}
+                                  >
                                     <Checkbox
                                       id={`onboard-manual-${access.access_id}`}
-                                      checked={onboardManualAccess.has(name)}
+                                      checked={isSelected}
+                                      onClick={(e) => e.stopPropagation()}
                                       onCheckedChange={() => handleOnboardManualToggle(name)}
+                                      className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
                                     />
-                                    <Label
-                                      htmlFor={`onboard-manual-${access.access_id}`}
-                                      className="text-sm font-medium leading-none cursor-pointer"
-                                    >
-                                      {name}
-                                    </Label>
+                                    <IconComponent className={`size-5 flex-shrink-0 ${isSelected ? "text-[#10a353]" : "text-gray-400"}`} />
+                                    <span className="font-semibold text-[15px]">{name}</span>
                                   </div>
                                 );
                               })
                           ) : (
-                            <p className="text-gray-500 text-sm py-4">No manual permissions to onboard.</p>
+                            <div className="py-12 text-center">
+                              <p className="text-gray-400 text-sm">No manual permissions to onboard.</p>
+                            </div>
                           )}
                         </div>
+                      </div>
 
-                        <div className="pt-6 border-t">
-                          <Button
-                            onClick={handleOnboardManual}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            disabled={onboardManualAccess.size === 0 || isOnboarding}
-                          >
-                            {isOnboarding ? (
-                              <>
-                                <Loader2 className="animate-spin mr-2 size-4 inline" />
-                                Onboarding...
-                              </>
-                            ) : (
-                              `Onboard (${onboardManualAccess.size} selected)`
-                            )}
-                          </Button>
-                        </div>
+                      <div className="pt-4 mt-4 border-t border-gray-100">
+                        <Button
+                          onClick={handleOnboardManual}
+                          className="w-full bg-[#10a353] hover:bg-[#0d8c47] text-white font-semibold rounded-xl py-6 text-base shadow-xs flex items-center justify-center gap-2 transition-colors"
+                          disabled={onboardManualAccess.size === 0 || isOnboarding}
+                        >
+                          {isOnboarding ? (
+                            <>
+                              <Loader2 className="animate-spin mr-2 size-5" />
+                              Onboarding...
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="size-5" />
+                              Onboard • {onboardManualAccess.size} selected
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </TabsContent>
 
                     {/* Onboard Automate Tab */}
-                    <TabsContent value="automate" className="mt-6">
-                      <div className="space-y-4">
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    <TabsContent value="automate" className="mt-4 flex-grow flex flex-col justify-between">
+                      <div>
+                        <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
+                        <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
                           {userAccesses.filter(a => !a.is_active && a.is_automate).length > 0 ? (
                             userAccesses
                               .filter(a => !a.is_active && a.is_automate)
                               .map(access => {
                                 const name = access.service?.service_name || "Unknown Service";
+                                const code = access.service?.service_code || "";
+                                const isSelected = onboardAutomateAccess.has(name);
+                                const IconComponent = getServiceIcon(code, name);
                                 return (
-                                  <div key={access.access_id} className="flex items-center space-x-2">
+                                  <div
+                                    key={access.access_id}
+                                    onClick={() => handleOnboardAutomateToggle(name)}
+                                    className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
+                                      ? "bg-[#e8f8f0] border-[#a3e2bc] text-[#0d592f]"
+                                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                                      }`}
+                                  >
                                     <Checkbox
                                       id={`onboard-automate-${access.access_id}`}
-                                      checked={onboardAutomateAccess.has(name)}
+                                      checked={isSelected}
+                                      onClick={(e) => e.stopPropagation()}
                                       onCheckedChange={() => handleOnboardAutomateToggle(name)}
+                                      className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
                                     />
-                                    <Label
-                                      htmlFor={`onboard-automate-${access.access_id}`}
-                                      className="text-sm font-medium leading-none cursor-pointer"
-                                    >
-                                      {name}
-                                    </Label>
+                                    <IconComponent className={`size-5 flex-shrink-0 ${isSelected ? "text-[#10a353]" : "text-gray-400"}`} />
+                                    <span className="font-semibold text-[15px]">{name}</span>
                                   </div>
                                 );
                               })
                           ) : (
-                            <p className="text-gray-500 text-sm py-4">No automated permissions to onboard.</p>
+                            <div className="py-12 text-center">
+                              <p className="text-gray-400 text-sm">No automated permissions to onboard.</p>
+                            </div>
                           )}
                         </div>
+                      </div>
 
-                        <div className="pt-6 border-t">
-                          <Button
-                            onClick={handleOnboardAutomate}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            disabled={onboardAutomateAccess.size === 0 || isOnboarding}
-                          >
-                            {isOnboarding ? (
-                              <>
-                                <Loader2 className="animate-spin mr-2 size-4 inline" />
-                                Onboarding...
-                              </>
-                            ) : (
-                              `Onboard (${onboardAutomateAccess.size} selected)`
-                            )}
-                          </Button>
-                        </div>
+                      <div className="pt-4 mt-4 border-t border-gray-100">
+                        <Button
+                          onClick={handleOnboardAutomate}
+                          className="w-full bg-[#10a353] hover:bg-[#0d8c47] text-white font-semibold rounded-xl py-6 text-base shadow-xs flex items-center justify-center gap-2 transition-colors"
+                          disabled={onboardAutomateAccess.size === 0 || isOnboarding}
+                        >
+                          {isOnboarding ? (
+                            <>
+                              <Loader2 className="animate-spin mr-2 size-5" />
+                              Onboarding...
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="size-5" />
+                              Onboard • {onboardAutomateAccess.size} selected
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </TabsContent>
                   </Tabs>
@@ -569,124 +682,153 @@ export default function App() {
         {/* Offboard Access (Right Column) */}
         <div className="lg:col-span-1">
           {selectedUser ? (
-            <Card className="flex flex-col h-full border-t-4 border-red-500">
-              <CardHeader className="bg-red-50/30 border-b border-red-100/50 pb-4">
-                <div className="flex items-center gap-3">
-                  <UserMinus className="size-6 text-red-600" />
-                  <CardTitle className="text-red-800 font-semibold text-lg">
-                    Offboard Access
-                  </CardTitle>
+            <Card className="flex flex-col h-full border border-gray-200/80 shadow-md rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-[#fff8f8] border-b border-[#fce3e3] pb-5 pt-6 px-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-[#fdebeb] rounded-2xl text-[#d91e36] flex items-center justify-center shadow-xs">
+                    <UserMinus className="size-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg leading-tight">Offboard Access</h3>
+                    <p className="text-xs text-gray-500 font-medium mt-0.5">Revoke existing permissions</p>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 px-6 flex-1 flex flex-col">
                 {isAccessLoading ? (
-                  <div className="py-16 flex justify-center text-gray-500">
-                    <Loader2 className="animate-spin size-8 text-red-500" />
+                  <div className="py-24 flex justify-center text-gray-500 flex-1 items-center">
+                    <Loader2 className="animate-spin size-10 text-[#d91e36]" />
                   </div>
                 ) : (
-                  <Tabs defaultValue="manual" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="manual">Manual</TabsTrigger>
-                      <TabsTrigger value="automate">Automate</TabsTrigger>
+                  <Tabs defaultValue="manual" className="w-full flex-1 flex flex-col">
+                    <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] p-1 rounded-2xl h-12">
+                      <TabsTrigger value="manual" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Manual</TabsTrigger>
+                      <TabsTrigger value="automate" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Automate</TabsTrigger>
                     </TabsList>
 
                     {/* Offboard Manual Tab */}
-                    <TabsContent value="manual" className="mt-6">
-                      <div className="space-y-4">
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    <TabsContent value="manual" className="mt-4 flex-grow flex flex-col justify-between">
+                      <div>
+                        <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
+                        <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
                           {userAccesses.filter(a => a.is_active && !a.is_automate).length > 0 ? (
                             userAccesses
                               .filter(a => a.is_active && !a.is_automate)
                               .map(access => {
                                 const name = access.service?.service_name || "Unknown Service";
+                                const code = access.service?.service_code || "";
+                                const isSelected = manualAccess.has(name);
+                                const IconComponent = getServiceIcon(code, name);
                                 return (
-                                  <div key={access.access_id} className="flex items-center space-x-2">
+                                  <div
+                                    key={access.access_id}
+                                    onClick={() => handleManualAccessToggle(name)}
+                                    className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
+                                      ? "bg-[#fdf2f2] border-[#fbc4c4] text-[#9b1c1c]"
+                                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                                      }`}
+                                  >
                                     <Checkbox
                                       id={`offboard-manual-${access.access_id}`}
-                                      checked={manualAccess.has(name)}
+                                      checked={isSelected}
+                                      onClick={(e) => e.stopPropagation()}
                                       onCheckedChange={() => handleManualAccessToggle(name)}
+                                      className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
                                     />
-                                    <Label
-                                      htmlFor={`offboard-manual-${access.access_id}`}
-                                      className="text-sm font-medium leading-none cursor-pointer"
-                                    >
-                                      {name}
-                                    </Label>
+                                    <IconComponent className={`size-5 flex-shrink-0 ${isSelected ? "text-[#d91e36]" : "text-gray-400"}`} />
+                                    <span className="font-semibold text-[15px]">{name}</span>
                                   </div>
                                 );
                               })
                           ) : (
-                            <p className="text-gray-500 text-sm py-4">No active manual permissions found.</p>
+                            <div className="py-12 text-center">
+                              <p className="text-gray-400 text-sm">No active manual permissions found.</p>
+                            </div>
                           )}
                         </div>
+                      </div>
 
-                        <div className="pt-6 border-t">
-                          <Button
-                            onClick={handleManualOffboard}
-                            variant="destructive"
-                            className="w-full bg-red-600 hover:bg-red-700 text-white"
-                            disabled={manualAccess.size === 0 || isOffboarding}
-                          >
-                            {isOffboarding ? (
-                              <>
-                                <Loader2 className="animate-spin mr-2 size-4 inline" />
-                                Offboarding...
-                              </>
-                            ) : (
-                              `Offboard (${manualAccess.size} selected)`
-                            )}
-                          </Button>
-                        </div>
+                      <div className="pt-4 mt-4 border-t border-gray-100">
+                        <Button
+                          onClick={handleManualOffboard}
+                          className="w-full bg-[#d91e36] hover:bg-[#c0152b] text-white font-semibold rounded-xl py-6 text-base shadow-xs flex items-center justify-center gap-2 transition-colors"
+                          disabled={manualAccess.size === 0 || isOffboarding}
+                        >
+                          {isOffboarding ? (
+                            <>
+                              <Loader2 className="animate-spin mr-2 size-5" />
+                              Offboarding...
+                            </>
+                          ) : (
+                            <>
+                              <UserMinus className="size-5" />
+                              Offboard • {manualAccess.size} selected
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </TabsContent>
 
                     {/* Offboard Automate Tab */}
-                    <TabsContent value="automate" className="mt-6">
-                      <div className="space-y-4">
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    <TabsContent value="automate" className="mt-4 flex-grow flex flex-col justify-between">
+                      <div>
+                        <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
+                        <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
                           {userAccesses.filter(a => a.is_active && a.is_automate).length > 0 ? (
                             userAccesses
                               .filter(a => a.is_active && a.is_automate)
                               .map(access => {
                                 const name = access.service?.service_name || "Unknown Service";
+                                const code = access.service?.service_code || "";
+                                const isSelected = automateAccess.has(name);
+                                const IconComponent = getServiceIcon(code, name);
                                 return (
-                                  <div key={access.access_id} className="flex items-center space-x-2">
+                                  <div
+                                    key={access.access_id}
+                                    onClick={() => handleAutomateAccessToggle(name)}
+                                    className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
+                                      ? "bg-[#fdf2f2] border-[#fbc4c4] text-[#9b1c1c]"
+                                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                                      }`}
+                                  >
                                     <Checkbox
                                       id={`offboard-automate-${access.access_id}`}
-                                      checked={automateAccess.has(name)}
+                                      checked={isSelected}
+                                      onClick={(e) => e.stopPropagation()}
                                       onCheckedChange={() => handleAutomateAccessToggle(name)}
+                                      className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
                                     />
-                                    <Label
-                                      htmlFor={`offboard-automate-${access.access_id}`}
-                                      className="text-sm font-medium leading-none cursor-pointer"
-                                    >
-                                      {name}
-                                    </Label>
+                                    <IconComponent className={`size-5 flex-shrink-0 ${isSelected ? "text-[#d91e36]" : "text-gray-400"}`} />
+                                    <span className="font-semibold text-[15px]">{name}</span>
                                   </div>
                                 );
                               })
                           ) : (
-                            <p className="text-gray-500 text-sm py-4">No active automated permissions found.</p>
+                            <div className="py-12 text-center">
+                              <p className="text-gray-400 text-sm">No active automated permissions found.</p>
+                            </div>
                           )}
                         </div>
+                      </div>
 
-                        <div className="pt-6 border-t">
-                          <Button
-                            onClick={handleAutomateOffboard}
-                            variant="destructive"
-                            className="w-full bg-red-600 hover:bg-red-700 text-white"
-                            disabled={automateAccess.size === 0 || isOffboarding}
-                          >
-                            {isOffboarding ? (
-                              <>
-                                <Loader2 className="animate-spin mr-2 size-4 inline" />
-                                Offboarding...
-                              </>
-                            ) : (
-                              `Offboard (${automateAccess.size} selected)`
-                            )}
-                          </Button>
-                        </div>
+                      <div className="pt-4 mt-4 border-t border-gray-100">
+                        <Button
+                          onClick={handleAutomateOffboard}
+                          className="w-full bg-[#d91e36] hover:bg-[#c0152b] text-white font-semibold rounded-xl py-6 text-base shadow-xs flex items-center justify-center gap-2 transition-colors"
+                          disabled={automateAccess.size === 0 || isOffboarding}
+                        >
+                          {isOffboarding ? (
+                            <>
+                              <Loader2 className="animate-spin mr-2 size-5" />
+                              Offboarding...
+                            </>
+                          ) : (
+                            <>
+                              <UserMinus className="size-5" />
+                              Offboard • {automateAccess.size} selected
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </TabsContent>
                   </Tabs>
@@ -702,6 +844,146 @@ export default function App() {
             </Card>
           )}
         </div>
+      </div>
+      {/* Custom Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[440px] bg-white rounded-[32px] p-8 shadow-2xl border border-gray-100 flex flex-col gap-6 animate-in zoom-in-95 duration-200">
+            {/* Close button (X) */}
+            <button
+              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="size-5" />
+            </button>
+
+            {/* Top Icon Badge */}
+            <div className="flex justify-start">
+              <div className={`p-4 rounded-[22px] flex items-center justify-center shadow-xs ${confirmModal.type === "onboard"
+                ? "bg-[#e6f6ee] text-[#10a353]"
+                : "bg-[#fdebeb] text-[#d91e36]"
+                }`}>
+                {confirmModal.type === "onboard" ? (
+                  <UserPlus className="size-7" />
+                ) : (
+                  <UserMinus className="size-7" />
+                )}
+              </div>
+            </div>
+
+            {/* Title & Subtitle */}
+            <div>
+              <h3 className="text-[22px] font-bold text-gray-900 leading-tight">
+                {confirmModal.isAutomate ? "Automated" : "Manual"}{" "}
+                {confirmModal.type === "onboard" ? "Onboarding" : "Offboarding"}
+              </h3>
+              <p className="text-[#8e98a8] text-base font-medium mt-2">
+                {confirmModal.type === "onboard" ? "Granting" : "Revoking"}{" "}
+                <span className="font-bold text-gray-900">{confirmModal.permissions.length} permissions</span>{" "}
+                {confirmModal.type === "onboard" ? "to" : "from"}{" "}
+                <span className="font-bold text-gray-900">{confirmModal.userName}</span>
+              </p>
+            </div>
+
+            {/* Permissions List container */}
+            <div className="bg-[#f8f9fa] rounded-2xl p-5 border border-gray-100 max-h-[220px] overflow-y-auto">
+              <ul className="space-y-3">
+                {confirmModal.permissions.map((name, idx) => (
+                  <li key={idx} className="flex items-center gap-3 text-[15px] font-semibold text-gray-700">
+                    <span className={`w-2 h-2 rounded-full ${confirmModal.type === "onboard" ? "bg-[#10a353]" : "bg-[#d91e36]"
+                      }`} />
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4">
+              <Button
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="flex-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 font-semibold rounded-2xl py-6 text-base shadow-xs transition-colors"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  const { type, isAutomate, permissions } = confirmModal;
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  if (type === "onboard") {
+                    onboardAccesses(permissions, isAutomate);
+                  } else {
+                    offboardAccesses(permissions, isAutomate);
+                  }
+                }}
+                className={`flex-1 text-white font-semibold rounded-2xl py-6 text-base shadow-xs transition-colors ${confirmModal.type === "onboard"
+                  ? "bg-[#10a353] hover:bg-[#0d8c47]"
+                  : "bg-[#d91e36] hover:bg-[#c0152b]"
+                  }`}
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifications Container */}
+      <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 max-w-[400px] w-full pointer-events-none">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`pointer-events-auto w-full p-5 rounded-[24px] border shadow-lg flex items-start gap-4 transition-all duration-300 transform translate-x-0 ${toast.success
+              ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#15803d]"
+              : "bg-[#fdf2f2] border-[#fbc4c4] text-[#9b1c1c]"
+              }`}
+          >
+            {/* Icon */}
+            <div className="flex-shrink-0 mt-0.5">
+              {toast.success ? (
+                <div className="w-8 h-8 rounded-full bg-[#16a34a] text-white flex items-center justify-center font-bold text-[18px] select-none">
+                  ✓
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[#d91e36] text-white flex items-center justify-center font-bold text-[18px] select-none">
+                  !
+                </div>
+              )}
+            </div>
+
+            {/* Text Area */}
+            <div className="flex-grow min-w-0">
+              <h4 className="font-bold text-[15px] leading-tight text-gray-900">
+                {toast.title}
+              </h4>
+              <p className="text-xs font-semibold text-gray-500 mt-1">
+                {toast.subtitle}
+              </p>
+
+              {/* Service Details List */}
+              {toast.details && toast.details.length > 0 && (
+                <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-2.5">
+                  {toast.details.map((detail, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs font-medium">
+                      <span className="text-gray-700 truncate mr-2">{detail.name}</span>
+                      <span className={detail.success ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+                        {detail.success ? "Success" : "Failed"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+              className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors mt-0.5"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   </div>;
