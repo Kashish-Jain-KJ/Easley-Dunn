@@ -16,7 +16,7 @@ const { getPool } = require("../db/database");
  */
 async function getUsers(_req, res) {
   const { rows } = await getPool().query(
-    "SELECT * FROM users ORDER BY user_id ASC"
+    "SELECT *, first_name || ' ' || last_name AS name FROM users ORDER BY user_id ASC"
   );
 
   res.json({

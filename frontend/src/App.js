@@ -19,7 +19,9 @@ import {
   Lock,
   Calendar,
   FileText,
-  X
+  X,
+  Users,
+  XCircle
 } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 
@@ -42,8 +44,34 @@ const getServiceIcon = (serviceCode, serviceName) => {
   return Shield;
 };
 
+const getInitials = (name) => {
+  if (!name) return "";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  const first = parts[0]?.charAt(0) || "";
+  const last = parts[parts.length - 1]?.charAt(0) || "";
+  return (first + last).toUpperCase();
+};
 
-
+const getAvatarColor = (name) => {
+  if (!name) return "bg-[#2563eb] text-white";
+  const colors = [
+    "bg-[#2563eb] text-white", // Blue
+    "bg-[#059669] text-white", // Green
+    "bg-[#d97706] text-white", // Amber/Orange
+    "bg-[#e11d48] text-white", // Rose/Pink-Red
+    "bg-[#4f46e5] text-white", // Indigo
+    "bg-[#7c3aed] text-white", // Purple
+    "bg-[#db2777] text-white", // Pink
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
 
 export default function App() {
   const [users, setUsers] = useState([]);
@@ -444,11 +472,24 @@ export default function App() {
     return matchesName || matchesEmail;
   });
 
+  const activeCount = users.filter(u => u.is_active).length;
+  const inactiveCount = users.filter(u => !u.is_active).length;
+
   return <div className="size-full bg-gray-50 p-8 min-h-screen">
     <div className="mx-auto max-w-7xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">User Access Management</h1>
-        <p className="mt-2 text-gray-600">Manage user access and offboarding</p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">User Access Management</h1>
+          <p className="mt-2 text-gray-600">Manage user access and offboarding</p>
+        </div>
+        <div className="flex items-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#f1f5f9] text-[#64748b] rounded-full font-medium text-sm select-none border border-slate-100">
+            <Users className="size-4.5 text-[#64748b]" />
+            <span>{activeCount} active</span>
+            <span className="text-slate-300">·</span>
+            <span>{inactiveCount} inactive</span>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
@@ -472,11 +513,21 @@ export default function App() {
                   <div className="py-24 flex justify-center text-gray-500 flex-1 items-center">
                     <Loader2 className="animate-spin size-10 text-[#10a353]" />
                   </div>
+                ) : !selectedUser.is_active ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center flex-grow">
+                    <div className="p-4 bg-[#fdebeb] text-[#d91e36] rounded-3xl flex items-center justify-center shadow-xs">
+                      <XCircle className="size-10" />
+                    </div>
+                    <h4 className="font-bold text-gray-900 text-lg mt-5">User is Inactive</h4>
+                    <p className="text-[#8e98a8] text-sm font-medium mt-2 max-w-[200px] leading-relaxed">
+                      Cannot onboard permissions for this user.
+                    </p>
+                  </div>
                 ) : (
-                  <Tabs defaultValue="manual" className="w-full flex-1 flex flex-col">
+                  <Tabs defaultValue="automate" className="w-full flex-1 flex flex-col">
                     <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] p-1 rounded-2xl h-12">
-                      <TabsTrigger value="manual" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Manual</TabsTrigger>
                       <TabsTrigger value="automate" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Automate</TabsTrigger>
+                      <TabsTrigger value="manual" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Manual</TabsTrigger>
                     </TabsList>
 
                     {/* Onboard Manual Tab */}
@@ -497,7 +548,7 @@ export default function App() {
                                     key={access.access_id}
                                     onClick={() => handleOnboardManualToggle(name)}
                                     className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
-                                      ? "bg-[#e8f8f0] border-[#a3e2bc] text-[#0d592f]"
+                                      ? "bg-[#f0fdf4] border-[#bbf7d0] text-slate-800"
                                       : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
                                       }`}
                                   >
@@ -508,7 +559,7 @@ export default function App() {
                                       onCheckedChange={() => handleOnboardManualToggle(name)}
                                       className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
                                     />
-                                    <IconComponent className={`size-5 flex-shrink-0 ${isSelected ? "text-[#10a353]" : "text-gray-400"}`} />
+                                    <IconComponent className="size-5 flex-shrink-0 text-gray-400" />
                                     <span className="font-semibold text-[15px]">{name}</span>
                                   </div>
                                 );
@@ -560,7 +611,7 @@ export default function App() {
                                     key={access.access_id}
                                     onClick={() => handleOnboardAutomateToggle(name)}
                                     className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
-                                      ? "bg-[#e8f8f0] border-[#a3e2bc] text-[#0d592f]"
+                                      ? "bg-[#f0fdf4] border-[#bbf7d0] text-slate-800"
                                       : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
                                       }`}
                                   >
@@ -571,7 +622,7 @@ export default function App() {
                                       onCheckedChange={() => handleOnboardAutomateToggle(name)}
                                       className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
                                     />
-                                    <IconComponent className={`size-5 flex-shrink-0 ${isSelected ? "text-[#10a353]" : "text-gray-400"}`} />
+                                    <IconComponent className="size-5 flex-shrink-0 text-gray-400" />
                                     <span className="font-semibold text-[15px]">{name}</span>
                                   </div>
                                 );
@@ -620,56 +671,97 @@ export default function App() {
 
         {/* Selected User Info & All Users List (Middle Column) */}
         <div className="lg:col-span-1">
-          <Card className="h-full flex flex-col">
-            {selectedUser ? (
-              <CardHeader className="pb-4 border-b">
-                <div className="flex items-center gap-3">
-                  <UserCircle className="size-12 text-gray-400 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-900 truncate text-base leading-tight">{selectedUser.name}</p>
-                      <Badge className={`text-white text-[10px] px-1.5 py-0 ${selectedUser.is_active ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"}`}>
-                        {selectedUser.is_active ? "Active" : "Inactive"}
-                      </Badge>
+          {selectedUser && (
+            <Card className="relative overflow-hidden border border-gray-200/80 shadow-md rounded-3xl bg-white p-6">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-cyan-500 to-indigo-500" />
+              <div className="flex items-center gap-5">
+                <div className={`size-16 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0 ${getAvatarColor(selectedUser.name)}`}>
+                  {getInitials(selectedUser.name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-xl font-bold text-gray-900 leading-tight">{selectedUser.name}</h2>
+                    <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                      selectedUser.is_active 
+                        ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#16a34a]" 
+                        : "bg-[#fdf2f2] border-[#fbc4c4] text-[#dc2626]"
+                    }`}>
+                      {selectedUser.is_active ? (
+                        <>
+                          <svg className="size-3.5 text-[#16a34a] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Active
+                        </>
+                      ) : (
+                        <>
+                          <svg className="size-3.5 text-[#dc2626] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Inactive
+                        </>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-600 truncate mt-0.5">{selectedUser.email}</p>
-
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
+                    <Mail className="size-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{selectedUser.email}</span>
                   </div>
                 </div>
-              </CardHeader>
-            ) : (
-              <CardHeader>
-                <CardTitle>All Users</CardTitle>
-              </CardHeader>
-            )}
+              </div>
+            </Card>
+          )}
+
+          <Card className="h-full flex flex-col border border-gray-200/80 shadow-md rounded-3xl overflow-hidden bg-white">
+            <CardHeader className="flex flex-row items-center justify-between pb-4 border-b">
+              <CardTitle className="text-xl font-bold text-gray-900">All Users</CardTitle>
+              <span className="text-sm font-semibold text-gray-400">
+                {filteredUsers.length} of {users.length}
+              </span>
+            </CardHeader>
             <CardContent className="p-0 flex flex-col flex-1">
               <div className="p-4 border-b">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                  <Input type="text" placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
+                  <Input type="text" placeholder="Search by name, email, role..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 bg-[#f8fafc] border-gray-200 rounded-xl" />
                 </div>
               </div>
-              <div className="divide-y max-h-[450px] overflow-y-auto flex-1">
+              <div className="divide-y divide-gray-100 max-h-[450px] overflow-y-auto flex-1">
                 {isLoading ? (
                   <div className="p-8 flex justify-center text-gray-500">
                     <Loader2 className="animate-spin size-6" />
                   </div>
-                ) : filteredUsers.length > 0 ? filteredUsers.map(user => (
-                  <button key={user.user_id} onClick={() => handleUserSelect(user)} className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${selectedUser?.user_id === user.user_id ? "bg-blue-50 border-l-4 border-blue-500" : ""}`}>
-                    <div className="flex items-start gap-3">
-                      <UserCircle className="size-10 text-gray-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-900 truncate">{user.name}</p>
-                          <Badge className={`text-white ${user.is_active ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"}`}>
-                            {user.is_active ? "Active" : "Inactive"}
-                          </Badge>
+                ) : filteredUsers.length > 0 ? filteredUsers.map(user => {
+                  const isSelected = selectedUser?.user_id === user.user_id;
+                  return (
+                    <button 
+                      key={user.user_id} 
+                      onClick={() => handleUserSelect(user)} 
+                      className={`w-full px-6 py-4 text-left transition-colors flex items-center justify-between group ${
+                        isSelected 
+                          ? "bg-[#eff6ff]" 
+                          : "hover:bg-gray-50 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className={`size-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${getAvatarColor(user.name)}`}>
+                          {getInitials(user.name)}
                         </div>
-                        <p className="text-sm text-gray-600 truncate">{user.email}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900 truncate text-[15px]">{user.name}</p>
+                            <span className={`size-2 rounded-full flex-shrink-0 ${user.is_active ? "bg-[#10b981]" : "bg-[#ef4444]"}`} />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                )) : (
+                      {isSelected && (
+                        <svg className="size-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                }) : (
                   <div className="p-8 text-center text-gray-500">
                     <p>No users found matching "{searchQuery}"</p>
                   </div>
@@ -699,11 +791,21 @@ export default function App() {
                   <div className="py-24 flex justify-center text-gray-500 flex-1 items-center">
                     <Loader2 className="animate-spin size-10 text-[#d91e36]" />
                   </div>
+                ) : !selectedUser.is_active ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center flex-grow">
+                    <div className="p-4 bg-[#fdebeb] text-[#d91e36] rounded-3xl flex items-center justify-center shadow-xs">
+                      <XCircle className="size-10" />
+                    </div>
+                    <h4 className="font-bold text-gray-900 text-lg mt-5">User is Inactive</h4>
+                    <p className="text-[#8e98a8] text-sm font-medium mt-2 max-w-[200px] leading-relaxed">
+                      No active access to revoke for this user.
+                    </p>
+                  </div>
                 ) : (
-                  <Tabs defaultValue="manual" className="w-full flex-1 flex flex-col">
+                  <Tabs defaultValue="automate" className="w-full flex-1 flex flex-col">
                     <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] p-1 rounded-2xl h-12">
-                      <TabsTrigger value="manual" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Manual</TabsTrigger>
                       <TabsTrigger value="automate" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Automate</TabsTrigger>
+                      <TabsTrigger value="manual" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all">Manual</TabsTrigger>
                     </TabsList>
 
                     {/* Offboard Manual Tab */}
