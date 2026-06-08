@@ -477,8 +477,8 @@ export default function App() {
     <div className="mx-auto max-w-7xl">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Access Management</h1>
-          <p className="mt-2 text-gray-600">Manage user access and offboarding</p>
+          <h1 className="text-3xl font-bold text-gray-900">Easley-Dunn Access Management</h1>
+          <p className="mt-2 text-gray-600">Manage user's onboarding and offboarding</p>
         </div>
         <div className="flex items-center">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#f1f5f9] text-[#64748b] rounded-full font-medium text-sm select-none border border-slate-100">
@@ -679,11 +679,10 @@ export default function App() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <h2 className="text-xl font-bold text-gray-900 leading-tight">{selectedUser.name}</h2>
-                    <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                      selectedUser.is_active 
-                        ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#16a34a]" 
+                    <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${selectedUser.is_active
+                        ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#16a34a]"
                         : "bg-[#fdf2f2] border-[#fbc4c4] text-[#dc2626]"
-                    }`}>
+                      }`}>
                       {selectedUser.is_active ? (
                         <>
                           <svg className="size-3.5 text-[#16a34a] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
@@ -732,14 +731,13 @@ export default function App() {
                 ) : filteredUsers.length > 0 ? filteredUsers.map(user => {
                   const isSelected = selectedUser?.user_id === user.user_id;
                   return (
-                    <button 
-                      key={user.user_id} 
-                      onClick={() => handleUserSelect(user)} 
-                      className={`w-full px-6 py-4 text-left transition-colors flex items-center justify-between group ${
-                        isSelected 
-                          ? "bg-[#eff6ff]" 
+                    <button
+                      key={user.user_id}
+                      onClick={() => handleUserSelect(user)}
+                      className={`w-full px-6 py-4 text-left transition-colors flex items-center justify-between group ${isSelected
+                          ? "bg-[#eff6ff]"
                           : "hover:bg-gray-50 bg-white"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
                         <div className={`size-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${getAvatarColor(user.name)}`}>
