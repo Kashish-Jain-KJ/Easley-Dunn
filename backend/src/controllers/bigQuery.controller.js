@@ -203,6 +203,24 @@ async function removeBigQueryUser(req, res) {
 }
 
 /**
+ * Helper function to read the project_id from the service account key inside the bigquery_json folder.
+ */
+function getBigQueryProjectId() {
+  const folderPath = path.join(__dirname, "../../bigquery_json");
+  if (fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory()) {
+    const files = fs.readdirSync(folderPath);
+    const jsonFile = files.find(f => f.endsWith(".json"));
+    if (jsonFile) {
+      const keyFilePath = path.join(folderPath, jsonFile);
+      const content = fs.readFileSync(keyFilePath, "utf8");
+      const key = JSON.parse(content);
+      return key.project_id;
+    }
+  }
+  return null;
+}
+
+/**
  * POST /bigquery/users/:userId
  * Onboards a user to BigQuery using project IAM policy.
  */
@@ -212,7 +230,7 @@ async function onboardBigQueryUser(req, res) {
   let serviceIdVal = null;
   try {
     // 1. Fetch the user's inactive BigQuery access records
-    const { rows: accessRows } = await getPool().query(
+    let { rows: accessRows } = await getPool().query(
       `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.role_name, usa.service_id
        FROM user_service_access usa
        JOIN services s ON usa.service_id = s.service_id
@@ -230,16 +248,48 @@ async function onboardBigQueryUser(req, res) {
         console.error(dbErr);
       }
 
-      await getPool().query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-        [userId, serviceIdVal, `No inactive BigQuery access records found for user_id '${userId}'. (Code: 404)`]
+      // Fetch user's email to create record
+      const { rows: userRows } = await getPool().query(
+        "SELECT email FROM users WHERE user_id = $1",
+        [userId]
       );
 
-      return res.status(404).json({
-        success: false,
-        message: `No inactive BigQuery access records found for user_id '${userId}'.`,
-      });
+      if (userRows.length === 0) {
+        await getPool().query(
+          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+          [userId, serviceIdVal, `User not found with user_id '${userId}'.`]
+        );
+        return res.status(404).json({
+          success: false,
+          message: `User not found with user_id '${userId}'.`,
+        });
+      }
+
+      const userEmail = userRows[0].email;
+      const projectId = getBigQueryProjectId();
+
+      if (!projectId) {
+        await getPool().query(
+          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+          [userId, serviceIdVal, "Credentials file or project_id not found inside bigquery_json folder."]
+        );
+        return res.status(500).json({
+          success: false,
+          message: "No credentials file or project_id found inside bigquery_json folder.",
+        });
+      }
+
+      // Insert new inactive access record
+      const { rows: newAccessRows } = await getPool().query(
+        `INSERT INTO user_service_access (user_id, service_id, external_account_identifier, external_user_identifier, is_active, last_synced_at)
+         VALUES ($1, $2, $3, $4, false, NOW())
+         RETURNING access_id, external_account_identifier, external_user_identifier, role_name, service_id`,
+        [userId, serviceIdVal, projectId, userEmail]
+      );
+
+      accessRows = newAccessRows;
     }
 
     // Authenticate with Google Cloud Resource Manager

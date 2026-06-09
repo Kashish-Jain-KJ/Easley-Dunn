@@ -56,7 +56,7 @@ async function onboardGoogleDriveUser(req, res) {
   const { userId } = req.params;
 
   // 1. Fetch all Google Drive access records for this user
-  const { rows: accessRows } = await getPool().query(
+  let { rows: accessRows } = await getPool().query(
     `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.role_name
      FROM user_service_access usa
      JOIN services s ON usa.service_id = s.service_id
@@ -65,10 +65,50 @@ async function onboardGoogleDriveUser(req, res) {
   );
 
   if (accessRows.length === 0) {
-    return res.status(404).json({
-      success: false,
-      message: `No inactive Google Drive access records found for user_id '${userId}'.`,
-    });
+    let serviceIdVal = null;
+    try {
+      const { rows } = await getPool().query(
+        "SELECT service_id FROM services WHERE service_code = 'GOOGLE_DRIVE'"
+      );
+      if (rows.length > 0) serviceIdVal = rows[0].service_id;
+    } catch (dbErr) {
+      console.error(dbErr);
+    }
+
+    // Fetch user's email
+    const { rows: userRows } = await getPool().query(
+      "SELECT email FROM users WHERE user_id = $1",
+      [userId]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `User not found with user_id '${userId}'.`,
+      });
+    }
+
+    const userEmail = userRows[0].email;
+
+    // Fetch folder ID from another record or fallback
+    const { rows: defaultDriveRows } = await getPool().query(
+      `SELECT usa.external_account_identifier 
+       FROM user_service_access usa
+       JOIN services s ON usa.service_id = s.service_id
+       WHERE s.service_code = 'GOOGLE_DRIVE' AND usa.external_account_identifier IS NOT NULL
+       LIMIT 1`
+    );
+    const folderId = defaultDriveRows.length > 0 ? defaultDriveRows[0].external_account_identifier : "1PngrPL6m3lGTWCyge2cOhZuMqcYLi7ve";
+
+    // Insert new inactive access record
+    const { rows: newAccessRows } = await getPool().query(
+      `INSERT INTO user_service_access (user_id, service_id, external_account_identifier, external_user_identifier, is_active, last_synced_at)
+       VALUES ($1, $2, $3, $4, false, NOW())
+       RETURNING access_id, external_account_identifier, external_user_identifier, role_name`,
+      [userId, serviceIdVal, folderId, userEmail]
+    );
+
+    accessRows = newAccessRows;
   }
 
   const drive = await getDriveClient();

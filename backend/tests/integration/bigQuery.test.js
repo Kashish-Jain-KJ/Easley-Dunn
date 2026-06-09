@@ -53,15 +53,15 @@ describe("BigQuery Endpoints", () => {
   });
 
   describe("POST /bigquery/users/:userId", () => {
-    it("should return 404 if no inactive access record is found", async () => {
+    it("should return 404 if user is not found in the database", async () => {
       const pool = getPool();
       const originalQuery = pool.query;
       pool.query = jest.fn().mockImplementation((text, params) => {
         if (text.includes("SELECT service_id FROM services")) {
           return Promise.resolve({ rows: [{ service_id: 3 }] });
         }
-        if (text.includes("SELECT usa.access_id")) {
-          return Promise.resolve({ rows: [] }); // No inactive record
+        if (text.includes("SELECT email FROM users")) {
+          return Promise.resolve({ rows: [] }); // User not found
         }
         if (text.includes("INSERT INTO log")) {
           return Promise.resolve({ rows: [] });
@@ -71,12 +71,12 @@ describe("BigQuery Endpoints", () => {
 
       try {
         const res = await request(app)
-          .post("/bigquery/users/1")
+          .post("/bigquery/users/999")
           .send({});
 
         expect(res.statusCode).toBe(404);
         expect(res.body.success).toBe(false);
-        expect(res.body.message).toMatch(/No inactive BigQuery access records found/i);
+        expect(res.body.message).toMatch(/User not found/i);
       } finally {
         pool.query = originalQuery;
       }
