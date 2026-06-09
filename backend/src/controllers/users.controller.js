@@ -40,7 +40,6 @@ async function getUserAccess(req, res) {
        usa.external_account_identifier,
        usa.external_user_identifier,
        usa.role_name,
-       usa.is_automate,
        usa.is_active AS access_is_active,
        usa.last_synced_at,
        s.service_id,
@@ -49,7 +48,7 @@ async function getUserAccess(req, res) {
        s.is_active
      FROM user_service_access usa
      LEFT JOIN services s ON s.service_id = usa.service_id
-     WHERE usa.user_id = $1
+     WHERE usa.user_id = $1 AND usa.is_active = true
      ORDER BY usa.access_id ASC`,
     [userId]
   );

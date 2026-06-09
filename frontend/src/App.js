@@ -73,6 +73,7 @@ const getAvatarColor = (name) => {
 
 export default function App() {
   const [users, setUsers] = useState([]);
+  const [services, setServices] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [manualAccess, setManualAccess] = useState(new Set());
   const [automateAccess, setAutomateAccess] = useState(new Set());
@@ -121,6 +122,33 @@ export default function App() {
     setOnboardAutomateAccess(newAccess);
   };
 
+  const fetchUserAccesses = async (userId) => {
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/access`);
+      const json = await res.json();
+      if (json.success) {
+        const activeAccesses = json.data.map(item => {
+          const serviceDetails = services.find(s => s.service_id?.toString() === item.service?.service_id?.toString());
+          return {
+            ...item,
+            is_automate: serviceDetails ? serviceDetails.is_automate : false
+          };
+        });
+
+        setUserAccesses(activeAccesses);
+
+        const manualAcc = activeAccesses.filter(item => !item.is_automate).map(item => item.service?.service_name).filter(Boolean);
+        const automateAcc = activeAccesses.filter(item => item.is_automate).map(item => item.service?.service_name).filter(Boolean);
+
+        setSelectedUser(prev => prev ? { ...prev, manualAccesses: manualAcc, automateAccesses: automateAcc } : null);
+        setManualAccess(new Set(manualAcc));
+        setAutomateAccess(new Set(automateAcc));
+      }
+    } catch (err) {
+      console.error("Failed to fetch accesses", err);
+    }
+  };
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -135,7 +163,19 @@ export default function App() {
         setIsLoading(false);
       }
     };
+    const fetchServices = async () => {
+      try {
+        const res = await fetch(`${API_URL}/services`);
+        const json = await res.json();
+        if (json.success) {
+          setServices(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch services", err);
+      }
+    };
     fetchUsers();
+    fetchServices();
   }, []);
 
   const handleManualAccessToggle = access => {
@@ -227,31 +267,7 @@ export default function App() {
         setManualAccess(newManualAccess);
       }
 
-      // Update selectedUser list to remove offboarded accesses from display
-      setSelectedUser(prev => {
-        if (!prev) return null;
-        if (isAutomate) {
-          return {
-            ...prev,
-            automateAccesses: (prev.automateAccesses || []).filter(name => !successfulNames.includes(name))
-          };
-        } else {
-          return {
-            ...prev,
-            manualAccesses: (prev.manualAccesses || []).filter(name => !successfulNames.includes(name))
-          };
-        }
-      });
-
-      // Update userAccesses state
-      setUserAccesses(prev =>
-        prev.map(a => {
-          if (a.service?.service_name && successfulNames.includes(a.service.service_name)) {
-            return { ...a, is_active: false };
-          }
-          return a;
-        })
-      );
+      await fetchUserAccesses(selectedUser.user_id);
     }
 
     results.forEach(result => {
@@ -302,31 +318,26 @@ export default function App() {
 
     const results = [];
     for (const serviceName of accessesToOnboard) {
-      const accessRecord = userAccesses.find(a => a.service?.service_name === serviceName);
-      if (!accessRecord) {
-        results.push({ name: serviceName, success: false, message: "Access record not found" });
+      const service = services.find(s => s.service_name === serviceName);
+      if (!service) {
+        results.push({ name: serviceName, success: false, message: "Service definition not found" });
         continue;
       }
 
-      const serviceCode = accessRecord.service?.service_code;
-      const accessId = accessRecord.access_id;
+      const serviceCode = service.service_code;
+      const serviceId = service.service_id;
       let endpoint = "";
       let method = "POST";
 
-      if (isAutomate) {
-        if (serviceCode === "GOOGLE_PLAY_CONSOLE") {
-          endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "GOOGLE_DRIVE") {
-          endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "BIG_QUERY") {
-          endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
-        } else {
-          // Fallback to manual/generic endpoint for automated services
-          endpoint = `${API_URL}/users/${selectedUser.user_id}/access/${accessId}/onboard`;
-        }
+      if (serviceCode === "GOOGLE_PLAY_CONSOLE") {
+        endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "GOOGLE_DRIVE") {
+        endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "BIG_QUERY") {
+        endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
       } else {
-        // Manual access onboarding via generic endpoint
-        endpoint = `${API_URL}/users/${selectedUser.user_id}/access/${accessId}/onboard`;
+        // Fallback to manual/generic endpoint
+        endpoint = `${API_URL}/users/${selectedUser.user_id}/access/${serviceId}/onboard`;
       }
 
       try {
@@ -364,26 +375,7 @@ export default function App() {
         setOnboardManualAccess(newOnboardManual);
       }
 
-      // Add to Offboard card selection (pre-check)
-      if (isAutomate) {
-        const newAutomateAccess = new Set(automateAccess);
-        successfulNames.forEach(name => newAutomateAccess.add(name));
-        setAutomateAccess(newAutomateAccess);
-      } else {
-        const newManualAccess = new Set(manualAccess);
-        successfulNames.forEach(name => newManualAccess.add(name));
-        setManualAccess(newManualAccess);
-      }
-
-      // Update userAccesses state
-      setUserAccesses(prev =>
-        prev.map(a => {
-          if (a.service?.service_name && successfulNames.includes(a.service.service_name)) {
-            return { ...a, is_active: true };
-          }
-          return a;
-        })
-      );
+      await fetchUserAccesses(selectedUser.user_id);
     }
 
     results.forEach(result => {
@@ -441,25 +433,8 @@ export default function App() {
     }
 
     setIsAccessLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/users/${user.user_id}/access`);
-      const json = await res.json();
-      if (json.success) {
-        setUserAccesses(json.data);
-        const activeAccesses = json.data.filter(item => item.is_active);
-        const manualAcc = activeAccesses.filter(item => !item.is_automate).map(item => item.service?.service_name).filter(Boolean);
-        const automateAcc = activeAccesses.filter(item => item.is_automate).map(item => item.service?.service_name).filter(Boolean);
-
-        const updatedUser = { ...user, manualAccesses: manualAcc, automateAccesses: automateAcc };
-        setSelectedUser(updatedUser);
-        setManualAccess(new Set(manualAcc));
-        setAutomateAccess(new Set(automateAcc));
-      }
-    } catch (err) {
-      console.error("Failed to fetch accesses", err);
-    } finally {
-      setIsAccessLoading(false);
-    }
+    await fetchUserAccesses(user.user_id);
+    setIsAccessLoading(false);
   };
 
   // Filter users based on search query
@@ -472,6 +447,14 @@ export default function App() {
 
   const activeCount = users.filter(u => u.is_active).length;
   const inactiveCount = users.filter(u => !u.is_active).length;
+
+  // Get all services that the user does NOT have active access to
+  const inactiveServices = services.filter(service => {
+    return !userAccesses.some(a => a.service?.service_id?.toString() === service.service_id?.toString());
+  });
+
+  const onboardManualServices = inactiveServices.filter(s => !s.is_automate);
+  const onboardAutomateServices = inactiveServices.filter(s => s.is_automate);
 
   return <div className="size-full bg-gray-50 p-8 min-h-screen">
     <div className="mx-auto max-w-7xl">
@@ -533,35 +516,33 @@ export default function App() {
                       <div>
                         <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
                         <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                          {userAccesses.filter(a => !a.is_active && !a.is_automate).length > 0 ? (
-                            userAccesses
-                              .filter(a => !a.is_active && !a.is_automate)
-                              .map(access => {
-                                const name = access.service?.service_name || "Unknown Service";
-                                const code = access.service?.service_code || "";
-                                const isSelected = onboardManualAccess.has(name);
-                                const IconComponent = getServiceIcon(code, name);
-                                return (
-                                  <div
-                                    key={access.access_id}
-                                    onClick={() => handleOnboardManualToggle(name)}
-                                    className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
-                                      ? "bg-[#f0fdf4] border-[#bbf7d0] text-slate-800"
-                                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
-                                      }`}
-                                  >
-                                    <Checkbox
-                                      id={`onboard-manual-${access.access_id}`}
-                                      checked={isSelected}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onCheckedChange={() => handleOnboardManualToggle(name)}
-                                      className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
-                                    />
-                                    <IconComponent className="size-5 flex-shrink-0 text-gray-400" />
-                                    <span className="font-semibold text-[15px]">{name}</span>
-                                  </div>
-                                );
-                              })
+                          {onboardManualServices.length > 0 ? (
+                            onboardManualServices.map(service => {
+                              const name = service.service_name;
+                              const code = service.service_code;
+                              const isSelected = onboardManualAccess.has(name);
+                              const IconComponent = getServiceIcon(code, name);
+                              return (
+                                <div
+                                  key={service.service_id}
+                                  onClick={() => handleOnboardManualToggle(name)}
+                                  className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
+                                    ? "bg-[#f0fdf4] border-[#bbf7d0] text-slate-800"
+                                    : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                                    }`}
+                                >
+                                  <Checkbox
+                                    id={`onboard-manual-${service.service_id}`}
+                                    checked={isSelected}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onCheckedChange={() => handleOnboardManualToggle(name)}
+                                    className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
+                                  />
+                                  <IconComponent className="size-5 flex-shrink-0 text-gray-400" />
+                                  <span className="font-semibold text-[15px]">{name}</span>
+                                </div>
+                              );
+                            })
                           ) : (
                             <div className="py-12 text-center">
                               <p className="text-gray-400 text-sm">No manual permissions to onboard.</p>
@@ -596,35 +577,33 @@ export default function App() {
                       <div>
                         <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
                         <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                          {userAccesses.filter(a => !a.is_active && a.is_automate).length > 0 ? (
-                            userAccesses
-                              .filter(a => !a.is_active && a.is_automate)
-                              .map(access => {
-                                const name = access.service?.service_name || "Unknown Service";
-                                const code = access.service?.service_code || "";
-                                const isSelected = onboardAutomateAccess.has(name);
-                                const IconComponent = getServiceIcon(code, name);
-                                return (
-                                  <div
-                                    key={access.access_id}
-                                    onClick={() => handleOnboardAutomateToggle(name)}
-                                    className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
-                                      ? "bg-[#f0fdf4] border-[#bbf7d0] text-slate-800"
-                                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
-                                      }`}
-                                  >
-                                    <Checkbox
-                                      id={`onboard-automate-${access.access_id}`}
-                                      checked={isSelected}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onCheckedChange={() => handleOnboardAutomateToggle(name)}
-                                      className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
-                                    />
-                                    <IconComponent className="size-5 flex-shrink-0 text-gray-400" />
-                                    <span className="font-semibold text-[15px]">{name}</span>
-                                  </div>
-                                );
-                              })
+                          {onboardAutomateServices.length > 0 ? (
+                            onboardAutomateServices.map(service => {
+                              const name = service.service_name;
+                              const code = service.service_code;
+                              const isSelected = onboardAutomateAccess.has(name);
+                              const IconComponent = getServiceIcon(code, name);
+                              return (
+                                <div
+                                  key={service.service_id}
+                                  onClick={() => handleOnboardAutomateToggle(name)}
+                                  className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${isSelected
+                                    ? "bg-[#f0fdf4] border-[#bbf7d0] text-slate-800"
+                                    : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                                    }`}
+                                >
+                                  <Checkbox
+                                    id={`onboard-automate-${service.service_id}`}
+                                    checked={isSelected}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onCheckedChange={() => handleOnboardAutomateToggle(name)}
+                                    className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
+                                  />
+                                  <IconComponent className="size-5 flex-shrink-0 text-gray-400" />
+                                  <span className="font-semibold text-[15px]">{name}</span>
+                                </div>
+                              );
+                            })
                           ) : (
                             <div className="py-12 text-center">
                               <p className="text-gray-400 text-sm">No automated permissions to onboard.</p>
@@ -680,8 +659,8 @@ export default function App() {
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <h2 className="text-xl font-bold text-gray-900 leading-tight">{selectedUser.name}</h2>
                     <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${selectedUser.is_active
-                        ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#16a34a]"
-                        : "bg-[#fdf2f2] border-[#fbc4c4] text-[#dc2626]"
+                      ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#16a34a]"
+                      : "bg-[#fdf2f2] border-[#fbc4c4] text-[#dc2626]"
                       }`}>
                       {selectedUser.is_active ? (
                         <>
@@ -735,8 +714,8 @@ export default function App() {
                       key={user.user_id}
                       onClick={() => handleUserSelect(user)}
                       className={`w-full px-6 py-4 text-left transition-colors flex items-center justify-between group ${isSelected
-                          ? "bg-[#eff6ff]"
-                          : "hover:bg-gray-50 bg-white"
+                        ? "bg-[#eff6ff]"
+                        : "hover:bg-gray-50 bg-white"
                         }`}
                     >
                       <div className="flex items-center gap-3.5 min-w-0">

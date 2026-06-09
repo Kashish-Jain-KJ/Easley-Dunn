@@ -15,11 +15,13 @@ describe("Services Routes Integration Tests", () => {
   describe("GET /services", () => {
     it("should return all services in the database", async () => {
       const res = await request(app).get("/services");
+      const dbRes = await getPool().query("SELECT * FROM user_service_access");
+      console.log("USER SERVICE ACCESS ROWS:", dbRes.rows);
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body).toHaveProperty("count");
       expect(Array.isArray(res.body.data)).toBe(true);
-      
+
       if (res.body.count > 0) {
         const first = res.body.data[0];
         expect(first).toHaveProperty("service_id");
