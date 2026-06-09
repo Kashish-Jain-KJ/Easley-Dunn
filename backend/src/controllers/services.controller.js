@@ -41,4 +41,20 @@ async function getServiceCommands(req, res) {
   });
 }
 
-module.exports = { getServiceCommands };
+/**
+ * GET /services
+ * Returns all services in the database.
+ */
+async function getAllServices(req, res) {
+  const { rows } = await getPool().query(
+    "SELECT * FROM services ORDER BY service_id ASC"
+  );
+
+  res.json({
+    success: true,
+    count: rows.length,
+    data: rows,
+  });
+}
+
+module.exports = { getServiceCommands, getAllServices };
