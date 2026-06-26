@@ -16,6 +16,7 @@ const googlePlayRoutes = require("./googlePlay.routes");
 const bigQueryRoutes = require("./bigQuery.routes");
 const googleDriveRoutes = require("./googleDrive.routes");
 const googleAnalyticsRoutes = require("./googleAnalytics.routes");
+const appleStoreConnectRoutes = require("./appleStoreConnect.routes");
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use("/google-play", googlePlayRoutes);
 router.use("/bigquery", bigQueryRoutes);
 router.use("/google-drive", googleDriveRoutes);
 router.use("/google-analytics", googleAnalyticsRoutes);
+router.use(["/appleStoreConnect", "/appleStoreConnet"], appleStoreConnectRoutes);
 
 module.exports = router;

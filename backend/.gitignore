@@ -11,6 +11,7 @@ googleplay_json/
 bigquery_json/
 googledrive_json/
 googleanalytics_json/
+apple_key/
 
 # ── Logs ─────────────────────────────────────────────────────
 logs/

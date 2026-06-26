@@ -224,6 +224,8 @@ export default function App() {
           endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
         } else if (serviceCode === "GOOGLE_ANALYTICS") {
           endpoint = `${API_URL}/google-analytics/users/${selectedUser.user_id}`;
+        } else if (serviceCode === "APPLE_STORE_CONNECT") {
+          endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
         } else {
           // Fallback to manual/generic endpoint for automated services
           endpoint = `${API_URL}/users/${selectedUser.user_id}/access/${accessId}/offboard`;
@@ -335,6 +337,8 @@ export default function App() {
         endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
       } else if (serviceCode === "BIG_QUERY") {
         endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "APPLE_STORE_CONNECT") {
+        endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
       } else {
         // Fallback to manual/generic endpoint
         endpoint = `${API_URL}/users/${selectedUser.user_id}/access/${serviceId}/onboard`;
