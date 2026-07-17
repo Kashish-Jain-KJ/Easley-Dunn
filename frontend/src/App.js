@@ -148,12 +148,18 @@ export default function App() {
     if (!selectedUser) return;
     setIsOffboarding(true);
 
-    const results = [];
-    for (const serviceName of accessesToOffboard) {
+    const promises = accessesToOffboard.map(async (serviceName) => {
       const accessRecord = userAccesses.find(a => a.service?.service_name === serviceName);
       if (!accessRecord) {
-        results.push({ name: serviceName, success: false, message: "Access record not found" });
-        continue;
+        showToast({
+          type: "offboard",
+          isAutomate,
+          success: false,
+          title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
+          subtitle: "Error: Access record not found",
+          details: []
+        });
+        return { name: serviceName, success: false };
       }
 
       const serviceCode = accessRecord.service?.service_code;
@@ -172,12 +178,26 @@ export default function App() {
         } else if (serviceCode === "APPLE_STORE_CONNECT") {
           endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
         } else {
-          results.push({ name: serviceName, success: false, message: "No endpoint created" });
-          continue;
+          showToast({
+            type: "offboard",
+            isAutomate,
+            success: false,
+            title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
+            subtitle: "Error: No endpoint created",
+            details: []
+          });
+          return { name: serviceName, success: false };
         }
       } else {
-        results.push({ name: serviceName, success: false, message: "No endpoint created" });
-        continue;
+        showToast({
+          type: "offboard",
+          isAutomate,
+          success: false,
+          title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
+          subtitle: "Error: No endpoint created",
+          details: []
+        });
+        return { name: serviceName, success: false };
       }
 
       try {
@@ -185,17 +205,36 @@ export default function App() {
           method: method
         });
         const data = await response.json();
-        if (response.ok && data.success) {
-          results.push({ name: serviceName, success: true, message: data.message });
-        } else {
-          results.push({ name: serviceName, success: false, message: data.message || "Failed to offboard" });
-        }
-      } catch (err) {
-        results.push({ name: serviceName, success: false, message: err.message || "Network error" });
-      }
-    }
+        const success = response.ok && data.success;
 
-    // Process results
+        showToast({
+          type: "offboard",
+          isAutomate,
+          success,
+          title: success
+            ? `${serviceName} Permission successfully revoked from ${selectedUser.name}`
+            : `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
+          subtitle: success
+            ? `${isAutomate ? "Automated" : "Manual"} offboarding complete`
+            : `Error: ${data.message || "Failed to offboard"}`,
+          details: []
+        });
+
+        return { name: serviceName, success };
+      } catch (err) {
+        showToast({
+          type: "offboard",
+          isAutomate,
+          success: false,
+          title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
+          subtitle: `Error: ${err.message || "Network error"}`,
+          details: []
+        });
+        return { name: serviceName, success: false };
+      }
+    });
+
+    const results = await Promise.all(promises);
     const successful = results.filter(r => r.success);
 
     if (successful.length > 0) {
@@ -218,23 +257,6 @@ export default function App() {
 
       await fetchUserAccesses(selectedUser.user_id);
     }
-
-    results.forEach(result => {
-      const title = result.success
-        ? `${result.name} Permission successfully revoked from ${selectedUser.name}`
-        : `Failed to revoke "${result.name}" Permission from ${selectedUser.name}`;
-      const subtitle = result.success
-        ? `${isAutomate ? "Automated" : "Manual"} offboarding complete`
-        : `Error: ${result.message || "Request failed"}`;
-      showToast({
-        type: "offboard",
-        isAutomate,
-        success: result.success,
-        title,
-        subtitle,
-        details: []
-      });
-    });
 
     setIsOffboarding(false);
   }, [selectedUser, userAccesses, fetchUserAccesses, showToast]);
@@ -265,12 +287,18 @@ export default function App() {
     if (!selectedUser) return;
     setIsOnboarding(true);
 
-    const results = [];
-    for (const serviceName of accessesToOnboard) {
+    const promises = accessesToOnboard.map(async (serviceName) => {
       const service = services.find(s => s.service_name === serviceName);
       if (!service) {
-        results.push({ name: serviceName, success: false, message: "Service definition not found" });
-        continue;
+        showToast({
+          type: "onboard",
+          isAutomate,
+          success: false,
+          title: `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
+          subtitle: "Error: Service definition not found",
+          details: []
+        });
+        return { name: serviceName, success: false };
       }
 
       const serviceCode = service.service_code;
@@ -286,8 +314,15 @@ export default function App() {
       } else if (serviceCode === "APPLE_STORE_CONNECT") {
         endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
       } else {
-        results.push({ name: serviceName, success: false, message: "No endpoint created" });
-        continue;
+        showToast({
+          type: "onboard",
+          isAutomate,
+          success: false,
+          title: `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
+          subtitle: "Error: No endpoint created",
+          details: []
+        });
+        return { name: serviceName, success: false };
       }
 
       try {
@@ -298,23 +333,41 @@ export default function App() {
           }
         });
         const data = await response.json();
-        if (response.ok && data.success) {
-          results.push({ name: serviceName, success: true, message: data.message });
-        } else {
-          results.push({ name: serviceName, success: false, message: data.message || "Failed to onboard" });
-        }
-      } catch (err) {
-        results.push({ name: serviceName, success: false, message: err.message || "Network error" });
-      }
-    }
+        const success = response.ok && data.success;
 
-    // Process results
+        showToast({
+          type: "onboard",
+          isAutomate,
+          success,
+          title: success
+            ? `${serviceName} Permission successfully granted to ${selectedUser.name}`
+            : `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
+          subtitle: success
+            ? `${isAutomate ? "Automated" : "Manual"} onboarding complete`
+            : `Error: ${data.message || "Failed to onboard"}`,
+          details: []
+        });
+
+        return { name: serviceName, success };
+      } catch (err) {
+        showToast({
+          type: "onboard",
+          isAutomate,
+          success: false,
+          title: `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
+          subtitle: `Error: ${err.message || "Network error"}`,
+          details: []
+        });
+        return { name: serviceName, success: false };
+      }
+    });
+
+    const results = await Promise.all(promises);
     const successful = results.filter(r => r.success);
 
     if (successful.length > 0) {
       const successfulNames = successful.map(r => r.name);
 
-      // Clear the selections on Onboard card
       if (isAutomate) {
         setOnboardAutomateAccess(prev => {
           const newOnboardAutomate = new Set(prev);
@@ -331,23 +384,6 @@ export default function App() {
 
       await fetchUserAccesses(selectedUser.user_id);
     }
-
-    results.forEach(result => {
-      const title = result.success
-        ? `${result.name} Permission successfully granted to ${selectedUser.name}`
-        : `Failed to grant "${result.name}" Permission to ${selectedUser.name}`;
-      const subtitle = result.success
-        ? `${isAutomate ? "Automated" : "Manual"} onboarding complete`
-        : `Error: ${result.message || "Request failed"}`;
-      showToast({
-        type: "onboard",
-        isAutomate,
-        success: result.success,
-        title,
-        subtitle,
-        details: []
-      });
-    });
 
     setIsOnboarding(false);
   }, [selectedUser, services, fetchUserAccesses, showToast]);
