@@ -1,10 +1,8 @@
 import React, { memo } from "react";
 import { UserMinus, Loader2, XCircle } from "lucide-react";
 import { Card, CardHeader, CardContent } from "./ui/card";
-import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { getServiceIcon } from "../utils/helpers";
+import AccessTabContent from "./AccessTabContent";
 
 function OffboardAccessCard({
   selectedUser,
@@ -79,134 +77,38 @@ function OffboardAccessCard({
 
             {/* Offboard Manual Tab */}
             <TabsContent value="manual" className="mt-4 flex-grow flex flex-col justify-between">
-              <div>
-                <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
-                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                  {manualActiveAccesses.length > 0 ? (
-                    manualActiveAccesses.map((access) => {
-                      const name = access.service?.service_name || "Unknown Service";
-                      const code = access.service?.service_code || "";
-                      const isSelected = manualAccess.has(name);
-                      const IconComponent = getServiceIcon(code, name);
-                      return (
-                        <div
-                          key={access.access_id}
-                          onClick={() => onManualToggle(name)}
-                          className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${
-                            isSelected
-                              ? "bg-[#fdf2f2] border-[#fbc4c4] text-[#9b1c1c]"
-                              : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <Checkbox
-                            id={`offboard-manual-${access.access_id}`}
-                            checked={isSelected}
-                            onClick={(e) => e.stopPropagation()}
-                            onCheckedChange={() => onManualToggle(name)}
-                            className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
-                          />
-                          <IconComponent
-                            className={`size-5 flex-shrink-0 ${
-                              isSelected ? "text-[#d91e36]" : "text-gray-400"
-                            }`}
-                          />
-                          <span className="font-semibold text-[15px]">{name}</span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="py-12 text-center">
-                      <p className="text-gray-400 text-sm">No active manual permissions found.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-4 mt-4 border-t border-gray-100">
-                <Button
-                  onClick={onOffboardManualClick}
-                  className="w-full bg-[#d91e36] hover:bg-[#c0152b] text-white font-semibold rounded-xl py-6 text-base shadow-xs flex items-center justify-center gap-2 transition-colors"
-                  disabled={manualAccess.size === 0 || isOffboarding}
-                >
-                  {isOffboarding ? (
-                    <>
-                      <Loader2 className="animate-spin mr-2 size-5" />
-                      Offboarding...
-                    </>
-                  ) : (
-                    <>
-                      <UserMinus className="size-5" />
-                      Offboard • {manualAccess.size} selected
-                    </>
-                  )}
-                </Button>
-              </div>
+              <AccessTabContent
+                items={manualActiveAccesses}
+                selectedSet={manualAccess}
+                onToggle={onManualToggle}
+                onActionClick={onOffboardManualClick}
+                actionText="Offboard"
+                actionIcon={UserMinus}
+                actionColor="bg-[#d91e36] hover:bg-[#c0152b]"
+                isLoading={isOffboarding}
+                loadingText="Offboarding..."
+                emptyText="No active manual permissions found."
+                type="offboard"
+                rowKey="access_id"
+              />
             </TabsContent>
 
             {/* Offboard Automate Tab */}
             <TabsContent value="automate" className="mt-4 flex-grow flex flex-col justify-between">
-              <div>
-                <p className="text-[#8e98a8] text-sm mb-3 font-medium">Select permissions</p>
-                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                  {automateActiveAccesses.length > 0 ? (
-                    automateActiveAccesses.map((access) => {
-                      const name = access.service?.service_name || "Unknown Service";
-                      const code = access.service?.service_code || "";
-                      const isSelected = automateAccess.has(name);
-                      const IconComponent = getServiceIcon(code, name);
-                      return (
-                        <div
-                          key={access.access_id}
-                          onClick={() => onAutomateToggle(name)}
-                          className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border transition-all duration-150 cursor-pointer select-none ${
-                            isSelected
-                              ? "bg-[#fdf2f2] border-[#fbc4c4] text-[#9b1c1c]"
-                              : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <Checkbox
-                            id={`offboard-automate-${access.access_id}`}
-                            checked={isSelected}
-                            onClick={(e) => e.stopPropagation()}
-                            onCheckedChange={() => onAutomateToggle(name)}
-                            className="size-5 rounded-[6px] border-gray-300 data-[state=checked]:bg-[#111827] data-[state=checked]:border-[#111827] data-[state=checked]:text-white transition-colors"
-                          />
-                          <IconComponent
-                            className={`size-5 flex-shrink-0 ${
-                              isSelected ? "text-[#d91e36]" : "text-gray-400"
-                            }`}
-                          />
-                          <span className="font-semibold text-[15px]">{name}</span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="py-12 text-center">
-                      <p className="text-gray-400 text-sm">No active automated permissions found.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-4 mt-4 border-t border-gray-100">
-                <Button
-                  onClick={onOffboardAutomateClick}
-                  className="w-full bg-[#d91e36] hover:bg-[#c0152b] text-white font-semibold rounded-xl py-6 text-base shadow-xs flex items-center justify-center gap-2 transition-colors"
-                  disabled={automateAccess.size === 0 || isOffboarding}
-                >
-                  {isOffboarding ? (
-                    <>
-                      <Loader2 className="animate-spin mr-2 size-5" />
-                      Offboarding...
-                    </>
-                  ) : (
-                    <>
-                      <UserMinus className="size-5" />
-                      Offboard • {automateAccess.size} selected
-                    </>
-                  )}
-                </Button>
-              </div>
+              <AccessTabContent
+                items={automateActiveAccesses}
+                selectedSet={automateAccess}
+                onToggle={onAutomateToggle}
+                onActionClick={onOffboardAutomateClick}
+                actionText="Offboard"
+                actionIcon={UserMinus}
+                actionColor="bg-[#d91e36] hover:bg-[#c0152b]"
+                isLoading={isOffboarding}
+                loadingText="Offboarding..."
+                emptyText="No active automated permissions found."
+                type="offboard"
+                rowKey="access_id"
+              />
             </TabsContent>
           </Tabs>
         )}

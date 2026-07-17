@@ -27,7 +27,7 @@ function UserList({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
             <Input
               type="text"
-              placeholder="Search by name, email, role..."
+              placeholder="Search by name..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="pl-9 bg-[#f8fafc] border-gray-200 rounded-xl"
@@ -46,9 +46,8 @@ function UserList({
                 <button
                   key={user.user_id}
                   onClick={() => onUserSelect(user)}
-                  className={`w-full px-6 py-4 text-left transition-colors flex items-center justify-between group ${
-                    isSelected ? "bg-[#eff6ff]" : "hover:bg-gray-50 bg-white"
-                  }`}
+                  className={`w-full px-6 py-4 text-left transition-colors flex items-center justify-between group ${isSelected ? "bg-[#eff6ff]" : "hover:bg-gray-50 bg-white"
+                    }`}
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div
@@ -64,9 +63,8 @@ function UserList({
                           {user.name}
                         </p>
                         <span
-                          className={`size-2 rounded-full flex-shrink-0 ${
-                            user.is_active ? "bg-[#10b981]" : "bg-[#ef4444]"
-                          }`}
+                          className={`size-2 rounded-full flex-shrink-0 ${user.is_active ? "bg-[#10b981]" : "bg-[#ef4444]"
+                            }`}
                         />
                       </div>
                     </div>
