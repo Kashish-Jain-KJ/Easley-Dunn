@@ -177,6 +177,8 @@ export default function App() {
           endpoint = `${API_URL}/google-analytics/users/${selectedUser.user_id}`;
         } else if (serviceCode === "APPLE_STORE_CONNECT") {
           endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
+        } else if (serviceCode === "GOOGLE_CLOUD") {
+          endpoint = `${API_URL}/google-cloud/users/${selectedUser.user_id}`;
         } else {
           showToast({
             type: "offboard",
@@ -313,6 +315,8 @@ export default function App() {
         endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
       } else if (serviceCode === "APPLE_STORE_CONNECT") {
         endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "GOOGLE_CLOUD") {
+        endpoint = `${API_URL}/google-cloud/users/${selectedUser.user_id}`;
       } else {
         showToast({
           type: "onboard",
