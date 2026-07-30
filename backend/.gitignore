@@ -12,6 +12,7 @@ bigquery_json/
 googledrive_json/
 googleanalytics_json/
 apple_key/
+googlecloud_json/
 
 # ── Logs ─────────────────────────────────────────────────────
 logs/
