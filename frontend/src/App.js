@@ -6,6 +6,7 @@ import OnboardAccessCard from "./components/OnboardAccessCard";
 import OffboardAccessCard from "./components/OffboardAccessCard";
 import ConfirmModal from "./components/ConfirmModal";
 import ToastContainer from "./components/ToastContainer";
+import ActivityLogsCard from "./components/ActivityLogsCard";
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -18,9 +19,12 @@ export default function App() {
   const [onboardManualAccess, setOnboardManualAccess] = useState(new Set());
   const [onboardAutomateAccess, setOnboardAutomateAccess] = useState(new Set());
   const [userAccesses, setUserAccesses] = useState([]);
+  const [userLogs, setUserLogs] = useState([]);
+  const [logsSummary, setLogsSummary] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isAccessLoading, setIsAccessLoading] = useState(false);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isOffboarding, setIsOffboarding] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -90,6 +94,23 @@ export default function App() {
       console.error("Failed to fetch accesses", err);
     }
   }, [services]);
+
+  const fetchUserLogs = useCallback(async (userId) => {
+    if (!userId) return;
+    setIsLogsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/logs`);
+      const json = await res.json();
+      if (json.success) {
+        setUserLogs(json.data || []);
+        setLogsSummary(json.summary || null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch user logs", err);
+    } finally {
+      setIsLogsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -258,10 +279,11 @@ export default function App() {
       }
 
       await fetchUserAccesses(selectedUser.user_id);
+      await fetchUserLogs(selectedUser.user_id);
     }
 
     setIsOffboarding(false);
-  }, [selectedUser, userAccesses, fetchUserAccesses, showToast]);
+  }, [selectedUser, userAccesses, fetchUserAccesses, fetchUserLogs, showToast]);
 
   const handleManualOffboard = useCallback(() => {
     if (!selectedUser || manualAccess.size === 0) return;
@@ -387,10 +409,11 @@ export default function App() {
       }
 
       await fetchUserAccesses(selectedUser.user_id);
+      await fetchUserLogs(selectedUser.user_id);
     }
 
     setIsOnboarding(false);
-  }, [selectedUser, services, fetchUserAccesses, showToast]);
+  }, [selectedUser, services, fetchUserAccesses, fetchUserLogs, showToast]);
 
   const handleOnboardManual = useCallback(() => {
     if (!selectedUser || onboardManualAccess.size === 0) return;
@@ -427,9 +450,12 @@ export default function App() {
     }
 
     setIsAccessLoading(true);
-    await fetchUserAccesses(user.user_id);
+    await Promise.all([
+      fetchUserAccesses(user.user_id),
+      fetchUserLogs(user.user_id)
+    ]);
     setIsAccessLoading(false);
-  }, [fetchUserAccesses]);
+  }, [fetchUserAccesses, fetchUserLogs]);
 
   // Filter users based on search query
   const filteredUsers = useMemo(() => {
@@ -453,6 +479,26 @@ export default function App() {
 
   const onboardManualServices = useMemo(() => inactiveServices.filter(s => !s.is_automate), [inactiveServices]);
   const onboardAutomateServices = useMemo(() => inactiveServices.filter(s => s.is_automate), [inactiveServices]);
+
+  const handleCloseModal = useCallback(() => {
+    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleConfirmModal = useCallback(() => {
+    setConfirmModal(prev => {
+      const { type, isAutomate, permissions } = prev;
+      if (type === "onboard") {
+        onboardAccesses(permissions, isAutomate);
+      } else {
+        offboardAccesses(permissions, isAutomate);
+      }
+      return { ...prev, isOpen: false };
+    });
+  }, [onboardAccesses, offboardAccesses]);
+
+  const handleCloseToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   return (
     <div className="size-full bg-gray-50 p-8 min-h-screen">
@@ -508,6 +554,16 @@ export default function App() {
           </div>
         </div>
 
+        {/* Activity Logs (Bottom Section) */}
+        {selectedUser && (
+          <ActivityLogsCard
+            selectedUser={selectedUser}
+            logs={userLogs}
+            isLoading={isLogsLoading}
+            summary={logsSummary}
+          />
+        )}
+
         {/* Confirmation Modal */}
         <ConfirmModal
           isOpen={confirmModal.isOpen}
@@ -515,24 +571,14 @@ export default function App() {
           isAutomate={confirmModal.isAutomate}
           permissions={confirmModal.permissions}
           userName={confirmModal.userName}
-          onClose={useCallback(() => setConfirmModal(prev => ({ ...prev, isOpen: false })), [])}
-          onConfirm={useCallback(() => {
-            setConfirmModal(prev => {
-              const { type, isAutomate, permissions } = prev;
-              if (type === "onboard") {
-                onboardAccesses(permissions, isAutomate);
-              } else {
-                offboardAccesses(permissions, isAutomate);
-              }
-              return { ...prev, isOpen: false };
-            });
-          }, [onboardAccesses, offboardAccesses])}
+          onClose={handleCloseModal}
+          onConfirm={handleConfirmModal}
         />
 
         {/* Toast Notifications */}
         <ToastContainer
           toasts={toasts}
-          onCloseToast={useCallback(id => setToasts(prev => prev.filter(t => t.id !== id)), [])}
+          onCloseToast={handleCloseToast}
         />
       </div>
     </div>

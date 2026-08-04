@@ -161,5 +161,54 @@ async function offboardUserAccess(req, res) {
   });
 }
 
-module.exports = { getUsers, getUserAccess, onboardUserAccess, offboardUserAccess };
+/**
+ * GET /users/:userId/logs
+ * Returns activity log records for a specific user from the `log` table.
+ */
+async function getUserLogs(req, res) {
+  const { userId } = req.params;
+
+  const { rows: logRows } = await getPool().query(
+    `SELECT
+       l.id,
+       l.user_id,
+       l.service_id,
+       l.command_type,
+       l.status,
+       l.error_message,
+       l.created_at,
+       s.service_name,
+       s.service_code
+     FROM log l
+     LEFT JOIN services s ON s.service_id = l.service_id
+     WHERE l.user_id = $1
+     ORDER BY l.created_at DESC, l.id DESC`,
+    [userId]
+  );
+
+  const total = logRows.length;
+  const successCount = logRows.filter((r) => r.status === "SUCCESS").length;
+  const failedCount = logRows.filter((r) => r.status === "FAILED").length;
+
+  res.json({
+    success: true,
+    userId,
+    count: total,
+    summary: {
+      total,
+      success: successCount,
+      failed: failedCount,
+    },
+    data: logRows,
+  });
+}
+
+module.exports = {
+  getUsers,
+  getUserAccess,
+  onboardUserAccess,
+  offboardUserAccess,
+  getUserLogs,
+};
+
 

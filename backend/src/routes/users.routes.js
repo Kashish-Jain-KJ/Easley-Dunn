@@ -10,7 +10,7 @@
 
 const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
-const { getUsers, getUserAccess, onboardUserAccess, offboardUserAccess } = require("../controllers/users.controller");
+const { getUsers, getUserAccess, onboardUserAccess, offboardUserAccess, getUserLogs } = require("../controllers/users.controller");
 
 const router = Router();
 
@@ -86,5 +86,52 @@ router.get("/:userId/access", asyncHandler(getUserAccess));
 router.post("/:userId/access/:accessId/onboard", asyncHandler(onboardUserAccess));
 router.post("/:userId/access/:accessId/offboard", asyncHandler(offboardUserAccess));
 
+/**
+ * @swagger
+ * /users/{userId}/logs:
+ *   get:
+ *     summary: Get execution activity logs for a user
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: The user's primary key (user_id)
+ *     responses:
+ *       200:
+ *         description: Execution log records for the specified user.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 userId:  { type: string }
+ *                 count:   { type: integer }
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     total:   { type: integer }
+ *                     success: { type: integer }
+ *                     failed:  { type: integer }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:           { type: integer }
+ *                       user_id:      { type: integer }
+ *                       service_id:   { type: integer }
+ *                       command_type: { type: string }
+ *                       status:       { type: string }
+ *                       error_message: { type: string, nullable: true }
+ *                       created_at:   { type: string, format: date-time }
+ *                       service_name: { type: string, nullable: true }
+ *                       service_code: { type: string, nullable: true }
+ */
+router.get("/:userId/logs", asyncHandler(getUserLogs));
+
 module.exports = router;
+
 
