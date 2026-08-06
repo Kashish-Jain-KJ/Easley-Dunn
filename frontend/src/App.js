@@ -443,9 +443,12 @@ export default function App() {
     setOnboardAutomateAccess(new Set());
     setManualAccess(new Set());
     setAutomateAccess(new Set());
+    setUserLogs([]);
+    setLogsSummary(null);
 
     if (!user.is_active) {
       setUserAccesses([]);
+      await fetchUserLogs(user.user_id);
       return;
     }
 

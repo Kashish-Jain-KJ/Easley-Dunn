@@ -5,14 +5,15 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   UserPlus,
-  UserMinus
+  UserMinus,
+  ExternalLink
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
+import ErrorDetailsModal from "./ErrorDetailsModal";
 
 function formatDate(dateString) {
   if (!dateString) return "—";
@@ -45,6 +46,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
   const [typeFilter, setTypeFilter] = useState("ALL"); // ALL, ONBOARD, OFFBOARD
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL, SUCCESS, FAILED
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedErrorLog, setSelectedErrorLog] = useState(null);
   const itemsPerPage = 10;
 
   // Calculate summary counts if not provided by backend
@@ -121,7 +123,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
             <p className="text-xs font-semibold text-gray-500 mt-1">
               <span className="text-gray-700">{computedSummary.total} total</span>
               {" • "}
-              <span className="text-emerald-600">{computedSummary.success} success</span>
+              <span className="text-[#065f46]">{computedSummary.success} success</span>
               {" • "}
               <span className="text-rose-600">{computedSummary.failed} failed</span>
             </p>
@@ -200,8 +202,31 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
             <p className="text-sm text-gray-400 mt-1">Select a user from the list above to view their activity logs.</p>
           </div>
         ) : isLoading ? (
-          <div className="p-12 flex justify-center text-gray-500">
-            <Loader2 className="animate-spin size-8 text-blue-500" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50/70 border-b border-gray-100 text-gray-400 uppercase font-semibold text-[11px] tracking-wider">
+                  <th className="py-3 px-6 w-16">ID</th>
+                  <th className="py-3 px-6">Service</th>
+                  <th className="py-3 px-6">Type</th>
+                  <th className="py-3 px-6">Status</th>
+                  <th className="py-3 px-6 max-w-xs">Error</th>
+                  <th className="py-3 px-6 text-right">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[1, 2, 3, 4, 5].map((idx) => (
+                  <tr key={idx} className="animate-pulse">
+                    <td className="py-4 px-6"><div className="h-4 w-8 bg-gray-200/80 rounded-md" /></td>
+                    <td className="py-4 px-6"><div className="h-4 w-32 bg-gray-200/80 rounded-md" /></td>
+                    <td className="py-4 px-6"><div className="h-6 w-24 bg-gray-200/80 rounded-full" /></td>
+                    <td className="py-4 px-6"><div className="h-6 w-24 bg-gray-200/80 rounded-full" /></td>
+                    <td className="py-4 px-6"><div className="h-4 w-44 bg-gray-200/80 rounded-md" /></td>
+                    <td className="py-4 px-6 text-right"><div className="h-4 w-28 bg-gray-200/80 rounded-md ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="p-12 text-center text-gray-400">
@@ -229,9 +254,18 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
                 {paginatedLogs.map((log) => {
                   const isSuccess = log.status === "SUCCESS";
                   const isOnboard = log.command_type === "ONBOARD";
+                  const hasError = Boolean(log.error_message);
 
                   return (
-                    <tr key={log.id} className="hover:bg-gray-50/60 transition-colors">
+                    <tr
+                      key={log.id}
+                      onClick={() => hasError && setSelectedErrorLog(log)}
+                      className={`transition-colors ${
+                        hasError
+                          ? "hover:bg-rose-50/40 cursor-pointer group"
+                          : "hover:bg-gray-50/60"
+                      }`}
+                    >
                       {/* ID */}
                       <td className="py-3.5 px-6 font-mono text-gray-400 font-normal">
                         {log.id}
@@ -275,10 +309,20 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
                       {/* Error Message */}
                       <td className="py-3.5 px-6 max-w-xs truncate">
                         {log.error_message ? (
-                          <div className="flex items-center gap-1.5 text-rose-600 text-[11px]" title={log.error_message}>
-                            <AlertCircle className="size-3.5 flex-shrink-0" />
-                            <span className="truncate">{log.error_message}</span>
-                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedErrorLog(log);
+                            }}
+                            className="flex items-center gap-1.5 text-rose-600 hover:text-rose-800 text-[11px] font-semibold group/btn transition-colors"
+                            title="Click to view full error payload"
+                          >
+                            <AlertCircle className="size-3.5 flex-shrink-0 text-rose-500" />
+                            <span className="truncate underline decoration-rose-300 underline-offset-2">
+                              {log.error_message}
+                            </span>
+                            <ExternalLink className="size-3 flex-shrink-0 opacity-0 group-hover/btn:opacity-100 transition-opacity ml-1" />
+                          </button>
                         ) : (
                           <span className="text-gray-300">—</span>
                         )}
@@ -328,6 +372,14 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
           </div>
         )}
       </CardContent>
+
+      {/* Error Details Modal */}
+      <ErrorDetailsModal
+        isOpen={Boolean(selectedErrorLog)}
+        log={selectedErrorLog}
+        userName={selectedUser?.name}
+        onClose={() => setSelectedErrorLog(null)}
+      />
     </Card>
   );
 }
