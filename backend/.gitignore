@@ -13,6 +13,7 @@ googledrive_json/
 googleanalytics_json/
 apple_key/
 googlecloud_json/
+firebase_json/
 
 # ── Logs ─────────────────────────────────────────────────────
 logs/

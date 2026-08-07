@@ -13,6 +13,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const {
   removeGoogleAnalyticsUser,
   listGoogleAnalyticsAccessBindings,
+  addGoogleAnalyticsUser,
 } = require("../controllers/googleAnalytics.controller");
 
 const router = Router();
@@ -42,6 +43,29 @@ const router = Router();
 //   "/access-bindings",
 //   asyncHandler(listGoogleAnalyticsAccessBindings)
 // );
+
+/**
+ * @swagger
+ * /google-analytics/users/{userId}:
+ *   post:
+ *     summary: Onboard a user to Google Analytics
+ *     tags: [GoogleAnalytics]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Successfully onboarded user to Google Analytics
+ *       400:
+ *         description: Invalid userId or missing identifiers
+ *       404:
+ *         description: User or access record not found
+ *       500:
+ *         description: Google Analytics API request failed
+ */
+router.post("/users/:userId", asyncHandler(addGoogleAnalyticsUser));
 
 /**
  * @swagger
