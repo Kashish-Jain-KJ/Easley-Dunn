@@ -200,6 +200,10 @@ export default function App() {
           endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
         } else if (serviceCode === "GOOGLE_CLOUD") {
           endpoint = `${API_URL}/google-cloud/users/${selectedUser.user_id}`;
+        } else if (serviceCode === "FIREBASE") {
+          endpoint = `${API_URL}/firebase/users/${selectedUser.user_id}`;
+        } else if (serviceCode === "KANBOARD") {
+          endpoint = `${API_URL}/kanboard/users/${selectedUser.user_id}`;
         } else {
           showToast({
             type: "offboard",
@@ -339,6 +343,10 @@ export default function App() {
         endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
       } else if (serviceCode === "GOOGLE_CLOUD") {
         endpoint = `${API_URL}/google-cloud/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "FIREBASE") {
+        endpoint = `${API_URL}/firebase/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "KANBOARD") {
+        endpoint = `${API_URL}/kanboard/users/${selectedUser.user_id}`;
       } else {
         showToast({
           type: "onboard",
