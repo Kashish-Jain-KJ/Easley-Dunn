@@ -23,6 +23,7 @@ Each document below provides a self-contained, in-depth breakdown of a specific 
 6. ☁️ **[Google Cloud IAM Integration](./GOOGLE_CLOUD_INTEGRATION.md)** — Cloud project IAM policy modification and role binding administration via Google Cloud Resource Manager API v3.
 7. 🔥 **[Firebase Authentication Integration](./FIREBASE_INTEGRATION.md)** — User identity creation and removal across Firebase projects using Firebase Admin SDK.
 8. 📋 **[Kanboard Integration](./KANBOARD_INTEGRATION.md)** — Project member provisioning and automated credentials mailing over Kanboard JSON-RPC 2.0 API & SMTP.
+9. 👾 **[Discord Integration](./DISCORD_INTEGRATION.md)** — Community & team member guild role assignment and member kicking via Discord REST API v10.
 
 ---
 

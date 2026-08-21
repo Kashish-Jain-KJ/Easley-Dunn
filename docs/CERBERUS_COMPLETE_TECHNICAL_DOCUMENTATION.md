@@ -434,6 +434,7 @@ Cerberus implements a **Provider-Specific Controller Pattern** with a **Unified 
 - **[Google Cloud IAM Integration](./GOOGLE_CLOUD_INTEGRATION.md)**: Manages GCP project IAM policy bindings via `cloudresourcemanager.projects`.
 - **[Firebase Authentication Integration](./FIREBASE_INTEGRATION.md)**: Manages Firebase user identity accounts via `firebase-admin/auth`.
 - **[Kanboard Integration](./KANBOARD_INTEGRATION.md)**: Manages project membership via JSON-RPC 2.0 and emails credentials via SMTP.
+- **[Discord Integration](./DISCORD_INTEGRATION.md)**: Manages guild member onboarding, role assignment, and offboarding via Discord REST API v10.
 
 ---
 
@@ -606,3 +607,4 @@ Follow this sequence when starting on Cerberus:
 | Google Cloud IAM | Complete | Covered in master & dedicated doc |
 | Firebase Auth | Complete | Covered in master & dedicated doc |
 | Kanboard | Complete | Covered in master & dedicated doc |
+| Discord | Complete | Covered in master & dedicated doc |
