@@ -296,13 +296,25 @@ async function onboardKanboardUser(req, res) {
   const localUser = await getLocalUser(userId);
 
   if (!localUser) {
-    return res.status(404).json({ success: false, message: `User not found with user_id '${userId}'.` });
+    const errMessage = `User not found with user_id '${userId}'.`;
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+      [userId, serviceIdVal, errMessage]
+    );
+    return res.status(404).json({ success: false, message: errMessage });
   }
 
   const accessRows = await getOrCreateInactiveAccessRows(userId, localUser, serviceIdVal);
 
   if (accessRows.length === 0) {
-    return res.status(404).json({ success: false, message: `No inactive Kanboard access records found for user_id '${userId}'.` });
+    const errMessage = `No inactive Kanboard access records found for user_id '${userId}'.`;
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+      [userId, serviceIdVal, errMessage]
+    );
+    return res.status(404).json({ success: false, message: errMessage });
   }
 
   const results = [];
@@ -311,7 +323,13 @@ async function onboardKanboardUser(req, res) {
     const { access_id, external_account_identifier: projectId, external_user_identifier, role_name } = row;
 
     if (!projectId) {
-      results.push({ access_id, status: "failed", error: "Missing Kanboard project ID" });
+      const errMessage = "Missing Kanboard project ID";
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, errMessage]
+      );
+      results.push({ access_id, status: "failed", error: errMessage });
       continue;
     }
 
@@ -345,9 +363,21 @@ async function onboardKanboardUser(req, res) {
         [String(kanboardUserId), access_id]
       );
 
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
+        [userId, serviceIdVal]
+      );
+
       results.push({ access_id, projectId, kanboardUserId, role, createdUser, emailSent, status: "onboarded" });
     } catch (error) {
-      results.push({ access_id, projectId, status: "failed", error: error.message });
+      const errMessage = error.message;
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, errMessage]
+      );
+      results.push({ access_id, projectId, status: "failed", error: errMessage });
     }
   }
 
@@ -367,6 +397,8 @@ async function offboardKanboardUser(req, res) {
     return res.status(400).json({ success: false, message: "userId must be an integer." });
   }
 
+  const serviceIdVal = await getKanboardServiceId();
+
   const { rows: accessRows } = await getPool().query(
     `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.service_id, u.email
      FROM user_service_access usa
@@ -377,7 +409,13 @@ async function offboardKanboardUser(req, res) {
   );
 
   if (accessRows.length === 0) {
-    return res.status(404).json({ success: false, message: `Kanboard access record not found for user_id '${userId}'.` });
+    const errMessage = `Kanboard access record not found for user_id '${userId}'.`;
+    await getPool().query(
+      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+      [userId, serviceIdVal, errMessage]
+    );
+    return res.status(404).json({ success: false, message: errMessage });
   }
 
   const results = [];
@@ -386,7 +424,13 @@ async function offboardKanboardUser(req, res) {
     const { access_id, external_account_identifier: projectId, external_user_identifier, email } = row;
 
     if (!projectId || !external_user_identifier) {
-      results.push({ access_id, status: "failed", error: "Missing Kanboard project ID or user identifier" });
+      const errMessage = "Missing Kanboard project ID or user identifier";
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, errMessage]
+      );
+      results.push({ access_id, status: "failed", error: errMessage });
       continue;
     }
 
@@ -406,9 +450,21 @@ async function offboardKanboardUser(req, res) {
         [access_id]
       );
 
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
+        [userId, serviceIdVal]
+      );
+
       results.push({ access_id, projectId, kanboardUserId, status: "removed" });
     } catch (error) {
-      results.push({ access_id, projectId, status: "failed", error: error.message });
+      const errMessage = error.message;
+      await getPool().query(
+        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
+         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
+        [userId, serviceIdVal, errMessage]
+      );
+      results.push({ access_id, projectId, status: "failed", error: errMessage });
     }
   }
 
