@@ -20,6 +20,7 @@ const appleStoreConnectRoutes = require("./appleStoreConnect.routes");
 const googleCloudRoutes = require("./googleCloud.routes");
 const firebaseRoutes = require("./firebase.routes");
 const kanboardRoutes = require("./kanboard.routes");
+const discordRoutes = require("./discord.routes");
 
 const router = Router();
 
@@ -35,5 +36,6 @@ router.use(["/appleStoreConnect", "/appleStoreConnet"], appleStoreConnectRoutes)
 router.use("/google-cloud", googleCloudRoutes);
 router.use("/firebase", firebaseRoutes);
 router.use("/kanboard", kanboardRoutes);
+router.use("/discord", discordRoutes);
 
 module.exports = router;

@@ -204,6 +204,8 @@ export default function App() {
           endpoint = `${API_URL}/firebase/users/${selectedUser.user_id}`;
         } else if (serviceCode === "KANBOARD") {
           endpoint = `${API_URL}/kanboard/users/${selectedUser.user_id}`;
+        } else if (serviceCode === "DISCORD") {
+          endpoint = `${API_URL}/discord/users/${selectedUser.user_id}`;
         } else {
           showToast({
             type: "offboard",
@@ -347,6 +349,8 @@ export default function App() {
         endpoint = `${API_URL}/firebase/users/${selectedUser.user_id}`;
       } else if (serviceCode === "KANBOARD") {
         endpoint = `${API_URL}/kanboard/users/${selectedUser.user_id}`;
+      } else if (serviceCode === "DISCORD") {
+        endpoint = `${API_URL}/discord/users/${selectedUser.user_id}`;
       } else {
         showToast({
           type: "onboard",
