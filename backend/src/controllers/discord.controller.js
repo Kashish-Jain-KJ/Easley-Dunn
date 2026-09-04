@@ -268,8 +268,11 @@ async function onboardDiscordUser(req, res) {
         console.error("Failed to send Discord invite email:", mailError.message);
       }
 
+      // Reset external_user_identifier — a fresh invite starts a new
+      // confirmation cycle, so any ID from a previous cycle must not be
+      // trusted until the person re-confirms via the confirm-page.
       await getPool().query(
-        `UPDATE user_service_access SET is_active = true, last_synced_at = NOW() WHERE access_id = $1`,
+        `UPDATE user_service_access SET is_active = true, external_user_identifier = NULL, last_synced_at = NOW() WHERE access_id = $1`,
         [access_id]
       );
 
@@ -552,4 +555,48 @@ async function renderConfirmPage(req, res) {
 </html>`);
 }
 
-module.exports = { onboardDiscordUser, removeDiscordUser, confirmDiscordUsername, renderConfirmPage };
+/**
+ * GET /discord/users/:userId/status
+ * Reports whether this user has been onboarded to Discord and whether
+ * they've completed the confirm-page step. Read-only — no log inserts,
+ * same as the existing GET /users/:userId/access endpoint.
+ */
+async function getDiscordStatus(req, res) {
+  const userId = Number.parseInt(req.params.userId, 10);
+
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ success: false, message: "userId must be an integer." });
+  }
+
+  const { rows } = await getPool().query(
+    `SELECT usa.is_active, usa.external_user_identifier
+     FROM user_service_access usa
+     JOIN services s ON usa.service_id = s.service_id
+     WHERE usa.user_id = $1 AND s.service_code = $2
+     ORDER BY usa.last_synced_at DESC NULLS LAST
+     LIMIT 1`,
+    [userId, SERVICE_CODE]
+  );
+
+  if (rows.length === 0) {
+    return res.json({
+      success: true,
+      userId,
+      onboarded: false,
+      confirmed: false,
+      discordUserId: null,
+    });
+  }
+
+  const { is_active, external_user_identifier } = rows[0];
+
+  return res.json({
+    success: true,
+    userId,
+    onboarded: is_active,
+    confirmed: Boolean(external_user_identifier),
+    discordUserId: external_user_identifier || null,
+  });
+}
+
+module.exports = { onboardDiscordUser, removeDiscordUser, confirmDiscordUsername, renderConfirmPage, getDiscordStatus };
