@@ -2,7 +2,7 @@ import React, { memo } from "react";
 import { Checkbox } from "./ui/checkbox";
 import { getServiceIcon } from "../utils/helpers";
 
-function ServiceRow({ id, name, serviceCode, isSelected, onToggle, type }) {
+function ServiceRow({ id, name, serviceCode, isSelected, onToggle, type, pendingConfirmation }) {
   const IconComponent = getServiceIcon(serviceCode, name);
 
   const selectedClasses =
@@ -31,6 +31,11 @@ function ServiceRow({ id, name, serviceCode, isSelected, onToggle, type }) {
       />
       <IconComponent className={iconClasses} />
       <span className="font-semibold text-[15px]">{name}</span>
+      {pendingConfirmation && (
+        <span className="ml-auto flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+          Pending confirmation
+        </span>
+      )}
     </div>
   );
 }

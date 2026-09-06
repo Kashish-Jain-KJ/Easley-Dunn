@@ -15,7 +15,8 @@ function AccessTabContent({
   loadingText,
   emptyText,
   type,
-  rowKey
+  rowKey,
+  discordStatus
 }) {
   return (
     <div className="mt-4 flex-grow flex flex-col justify-between">
@@ -30,6 +31,10 @@ function AccessTabContent({
               const name = type === "onboard" ? item.service_name : (item.service?.service_name || "Unknown Service");
               const serviceCode = type === "onboard" ? item.service_code : (item.service?.service_code || "");
               const isSelected = selectedSet.has(name);
+              const pendingConfirmation =
+                serviceCode === "DISCORD" &&
+                Boolean(discordStatus?.onboarded) &&
+                !discordStatus?.confirmed;
 
               return (
                 <ServiceRow
@@ -40,6 +45,7 @@ function AccessTabContent({
                   isSelected={isSelected}
                   onToggle={onToggle}
                   type={type}
+                  pendingConfirmation={pendingConfirmation}
                 />
               );
             })

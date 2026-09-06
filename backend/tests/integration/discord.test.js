@@ -679,4 +679,90 @@ describe("Discord integration", () => {
       expect(res.text).toContain('name="username"');
     });
   });
+
+  describe("GET /discord/users/:userId/status", () => {
+    it("should return 400 for an invalid userId", async () => {
+      const res = await request(app).get("/discord/users/abc/status");
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.message).toMatch(/userId must be an integer/i);
+    });
+
+    it("should report onboarded:false when no access row exists", async () => {
+      const pool = getPool();
+      const originalQuery = pool.query;
+
+      pool.query = jest.fn().mockImplementation((text) => {
+        if (text.includes("ORDER BY usa.last_synced_at")) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      try {
+        const res = await request(app).get("/discord/users/42/status");
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({
+          success: true,
+          userId: 42,
+          onboarded: false,
+          confirmed: false,
+          discordUserId: null,
+        });
+      } finally {
+        pool.query = originalQuery;
+      }
+    });
+
+    it("should report onboarded:true, confirmed:false when invite was sent but username not yet linked", async () => {
+      const pool = getPool();
+      const originalQuery = pool.query;
+
+      pool.query = jest.fn().mockImplementation((text) => {
+        if (text.includes("ORDER BY usa.last_synced_at")) {
+          return Promise.resolve({ rows: [{ is_active: true, external_user_identifier: null }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      try {
+        const res = await request(app).get("/discord/users/42/status");
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({
+          onboarded: true,
+          confirmed: false,
+          discordUserId: null,
+        });
+      } finally {
+        pool.query = originalQuery;
+      }
+    });
+
+    it("should report onboarded:true, confirmed:true with the Discord user ID once linked", async () => {
+      const pool = getPool();
+      const originalQuery = pool.query;
+
+      pool.query = jest.fn().mockImplementation((text) => {
+        if (text.includes("ORDER BY usa.last_synced_at")) {
+          return Promise.resolve({ rows: [{ is_active: true, external_user_identifier: "discord-user-222" }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      try {
+        const res = await request(app).get("/discord/users/42/status");
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({
+          onboarded: true,
+          confirmed: true,
+          discordUserId: "discord-user-222",
+        });
+      } finally {
+        pool.query = originalQuery;
+      }
+    });
+  });
 });

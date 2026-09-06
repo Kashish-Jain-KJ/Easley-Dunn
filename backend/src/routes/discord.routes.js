@@ -7,13 +7,14 @@
  * POST   /discord/users/:userId/confirm      → resolve a self-reported Discord username to a
  *                                               real user ID and record it on the access row
  * GET    /discord/users/:userId/confirm-page → plain HTML form that POSTs to /confirm above
+ * GET    /discord/users/:userId/status       → onboarded/confirmed status, read-only
  */
 
 "use strict";
 
 const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
-const { onboardDiscordUser, removeDiscordUser, confirmDiscordUsername, renderConfirmPage } = require("../controllers/discord.controller");
+const { onboardDiscordUser, removeDiscordUser, confirmDiscordUsername, renderConfirmPage, getDiscordStatus } = require("../controllers/discord.controller");
 
 const router = Router();
 
@@ -68,5 +69,39 @@ router.delete("/users/:userId", asyncHandler(removeDiscordUser));
 // Routes still fully functional, just not listed at /docs.
 router.post("/users/:userId/confirm", asyncHandler(confirmDiscordUsername));
 router.get("/users/:userId/confirm-page", asyncHandler(renderConfirmPage));
+
+/**
+ * @swagger
+ * /discord/users/{userId}/status:
+ *   get:
+ *     summary: Get a user's Discord onboarding/confirmation status
+ *     description: >
+ *       Read-only. Reports whether the user currently has an active Discord
+ *       access row (onboarded) and whether they've completed the confirm-page
+ *       step (confirmed) — i.e. whether external_user_identifier is set, which
+ *       is required before offboarding can kick them.
+ *     tags: [Discord]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Status returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 userId: { type: integer }
+ *                 onboarded: { type: boolean, description: "Has an active Discord access row" }
+ *                 confirmed: { type: boolean, description: "external_user_identifier is set" }
+ *                 discordUserId: { type: string, nullable: true }
+ *       400:
+ *         description: Invalid userId
+ */
+router.get("/users/:userId/status", asyncHandler(getDiscordStatus));
 
 module.exports = router;

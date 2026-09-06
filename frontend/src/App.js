@@ -21,6 +21,7 @@ export default function App() {
   const [userAccesses, setUserAccesses] = useState([]);
   const [userLogs, setUserLogs] = useState([]);
   const [logsSummary, setLogsSummary] = useState(null);
+  const [discordStatus, setDiscordStatus] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isAccessLoading, setIsAccessLoading] = useState(false);
@@ -94,6 +95,17 @@ export default function App() {
       console.error("Failed to fetch accesses", err);
     }
   }, [services]);
+
+  const fetchDiscordStatus = useCallback(async (userId) => {
+    try {
+      const res = await fetch(`${API_URL}/discord/users/${userId}/status`);
+      const json = await res.json();
+      setDiscordStatus(json.success ? json : null);
+    } catch (err) {
+      console.error("Failed to fetch Discord status", err);
+      setDiscordStatus(null);
+    }
+  }, []);
 
   const fetchUserLogs = useCallback(async (userId) => {
     if (!userId) return;
@@ -457,6 +469,7 @@ export default function App() {
     setAutomateAccess(new Set());
     setUserLogs([]);
     setLogsSummary(null);
+    setDiscordStatus(null);
 
     if (!user.is_active) {
       setUserAccesses([]);
@@ -467,10 +480,11 @@ export default function App() {
     setIsAccessLoading(true);
     await Promise.all([
       fetchUserAccesses(user.user_id),
-      fetchUserLogs(user.user_id)
+      fetchUserLogs(user.user_id),
+      fetchDiscordStatus(user.user_id)
     ]);
     setIsAccessLoading(false);
-  }, [fetchUserAccesses, fetchUserLogs]);
+  }, [fetchUserAccesses, fetchUserLogs, fetchDiscordStatus]);
 
   // Filter users based on search query
   const filteredUsers = useMemo(() => {
@@ -565,6 +579,7 @@ export default function App() {
               onOffboardManualClick={handleManualOffboard}
               onOffboardAutomateClick={handleAutomateOffboard}
               isOffboarding={isOffboarding}
+              discordStatus={discordStatus}
             />
           </div>
         </div>

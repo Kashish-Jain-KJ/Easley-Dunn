@@ -17,11 +17,13 @@ let pool;
  */
 function getPool() {
   if (!pool) {
-    pool = new Pool(dbConfig);
-    pool.on("connect", (client) => {
-      client.query(`SET search_path TO ${dbConfig.schema}`).catch((err) => {
-        logger.error(`Failed to set search_path to ${dbConfig.schema}`, err);
-      });
+    // search_path is set via connection startup options, not a follow-up
+    // SET query on "connect" — a follow-up query races the first real query
+    // on that same new connection and can lose, silently querying the wrong
+    // schema. Startup options are applied by Postgres before any query can run.
+    pool = new Pool({
+      ...dbConfig,
+      options: `-c search_path=${dbConfig.schema}`,
     });
     logger.info(`PostgreSQL pool created using DATABASE_URL`);
   }

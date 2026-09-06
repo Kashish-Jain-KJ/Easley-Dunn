@@ -14,7 +14,8 @@ function OffboardAccessCard({
   onAutomateToggle,
   onOffboardManualClick,
   onOffboardAutomateClick,
-  isOffboarding
+  isOffboarding,
+  discordStatus
 }) {
   if (!selectedUser) {
     return (
@@ -108,6 +109,7 @@ function OffboardAccessCard({
                 emptyText="No active automated permissions found."
                 type="offboard"
                 rowKey="access_id"
+                discordStatus={discordStatus}
               />
             </TabsContent>
           </Tabs>
