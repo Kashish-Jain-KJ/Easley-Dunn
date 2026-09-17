@@ -23,8 +23,8 @@
 
 "use strict";
 
-const nodemailer = require("nodemailer");
 const { getPool } = require("../db/database");
+const { getMailTransporter } = require("../utils/mail");
 
 const SERVICE_CODE = "DISCORD";
 const DISCORD_API_BASE = "https://discord.com/api/v10";
@@ -48,18 +48,6 @@ function getDiscordBotToken() {
 
 function getAppBaseUrl() {
   return process.env.API_URL || `http://localhost:${process.env.PORT || 5000}`;
-}
-
-function getMailTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.MAIL_SMTP_HOSTNAME,
-    port: parseInt(process.env.MAIL_SMTP_PORT || "587", 10),
-    secure: false,
-    auth: {
-      user: process.env.MAIL_SMTP_USERNAME,
-      pass: process.env.MAIL_SMTP_PASSWORD,
-    },
-  });
 }
 
 async function sendInviteEmail(toEmail, inviteUrl, confirmPageUrl) {
