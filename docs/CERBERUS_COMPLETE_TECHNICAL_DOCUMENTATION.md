@@ -240,6 +240,10 @@ Base URL: `http://localhost:5001` (mounted at `/`)
 ### Internal Authentication & Authorization
 *Confirmed by Code:* Cerberus currently operates in an administrative console mode. HTTP requests do not require bearer JWT authentication from the browser client. Security is enforced via network isolation, CORS origin restrictions (`CORS_ORIGINS`), and rate-limiting.
 
+> [!IMPORTANT]
+> **Known Development Limitation & Planned Controls:**
+> At present, most integration endpoints are not protected by authentication or admin authorization. The login page and admin authorization flow (e.g., magic link JWT authentication via `AUTH_JWT_SECRET`) will be added after the current integration development work is completed. Documenting these planned controls clarifies the current pre-production security posture.
+
 ### External API Authentication Mechanisms
 
 1. **Google Service Account Credentials (JSON):**

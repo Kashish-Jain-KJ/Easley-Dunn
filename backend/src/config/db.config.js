@@ -13,6 +13,7 @@ const dbConfig = {
   max: parseInt(process.env.DB_CONNECTION_LIMIT, 10) || 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
+  ssl: process.env.DB_SSL === "false" ? false : { rejectUnauthorized: false },
 };
 
 module.exports = dbConfig;
