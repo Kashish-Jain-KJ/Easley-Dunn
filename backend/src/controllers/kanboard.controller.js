@@ -10,8 +10,8 @@
 "use strict";
 
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
 const { getPool } = require("../db/database");
+const { getMailTransporter } = require("../utils/mail");
 
 /**
  * Required env:
@@ -41,18 +41,6 @@ function getKanboardConfig() {
   if (!token) throw new Error("KANBOARD_API_TOKEN is not configured in the environment.");
 
   return { apiUrl, username, token };
-}
-
-function getMailTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.MAIL_SMTP_HOSTNAME,
-    port: parseInt(process.env.MAIL_SMTP_PORT || "587", 10),
-    secure: false,
-    auth: {
-      user: process.env.MAIL_SMTP_USERNAME,
-      pass: process.env.MAIL_SMTP_PASSWORD,
-    },
-  });
 }
 
 async function sendCredentialsEmail(toEmail, username, temporaryPassword) {
