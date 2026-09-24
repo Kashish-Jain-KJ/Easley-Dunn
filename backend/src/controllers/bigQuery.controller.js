@@ -11,6 +11,7 @@ const { getPool } = require("../db/database");
 const { google } = require("googleapis");
 const path = require("path");
 const fs = require("fs");
+const { logActivity } = require("../utils/logUtils");
 
 /**
  * Helper function to instantiate an authenticated Cloud Resource Manager client.
@@ -67,11 +68,13 @@ async function removeBigQueryUser(req, res) {
         console.error(dbErr);
       }
 
-      await getPool().query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userId, serviceIdVal, `BigQuery access record not found for user_id '${userId}'. (Code: 404)`]
-      );
+      await logActivity({
+        userId,
+        serviceId: serviceIdVal,
+        commandType: "OFFBOARD",
+        status: "FAILED",
+        errorMessage: `BigQuery access record not found for user_id '${userId}'. (Code: 404)`,
+      });
 
       return res.status(404).json({
         success: false,
@@ -83,11 +86,13 @@ async function removeBigQueryUser(req, res) {
     serviceIdVal = service_id;
 
     if (!external_account_identifier || !external_user_identifier) {
-      await getPool().query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userId, serviceIdVal, "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)"]
-      );
+      await logActivity({
+        userId,
+        serviceId: serviceIdVal,
+        commandType: "OFFBOARD",
+        status: "FAILED",
+        errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)",
+      });
 
       return res.status(400).json({
         success: false,
@@ -129,11 +134,13 @@ async function removeBigQueryUser(req, res) {
     }
 
     if (!modified) {
-      await getPool().query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userId, serviceIdVal, `User/Role combination not found in IAM policy for project ${external_account_identifier}. (Code: 404)`]
-      );
+      await logActivity({
+        userId,
+        serviceId: serviceIdVal,
+        commandType: "OFFBOARD",
+        status: "FAILED",
+        errorMessage: `User/Role combination not found in IAM policy for project ${external_account_identifier}. (Code: 404)`,
+      });
 
       return res.status(404).json({
         success: false,
@@ -158,11 +165,7 @@ async function removeBigQueryUser(req, res) {
     );
 
     // Insert success log
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
-      [userId, serviceIdVal]
-    );
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
 
     console.log(`[BigQuery/IAM] Successfully removed ${external_user_identifier} from ${external_account_identifier}.`);
     
@@ -188,11 +191,7 @@ async function removeBigQueryUser(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     // Insert failure log
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, serviceIdVal, errMessage]
-    );
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
 
     res.status(500).json({
       success: false,
@@ -255,11 +254,13 @@ async function onboardBigQueryUser(req, res) {
       );
 
       if (userRows.length === 0) {
-        await getPool().query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, `User not found with user_id '${userId}'.`]
-        );
+        await logActivity({
+          userId,
+          serviceId: serviceIdVal,
+          commandType: "ONBOARD",
+          status: "FAILED",
+          errorMessage: `User not found with user_id '${userId}'.`,
+        });
         return res.status(404).json({
           success: false,
           message: `User not found with user_id '${userId}'.`,
@@ -270,11 +271,13 @@ async function onboardBigQueryUser(req, res) {
       const projectId = getBigQueryProjectId();
 
       if (!projectId) {
-        await getPool().query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, "Credentials file or project_id not found inside bigquery_json folder."]
-        );
+        await logActivity({
+          userId,
+          serviceId: serviceIdVal,
+          commandType: "ONBOARD",
+          status: "FAILED",
+          errorMessage: "Credentials file or project_id not found inside bigquery_json folder.",
+        });
         return res.status(500).json({
           success: false,
           message: "No credentials file or project_id found inside bigquery_json folder.",
@@ -302,11 +305,13 @@ async function onboardBigQueryUser(req, res) {
 
       if (!external_account_identifier || !external_user_identifier) {
         const errMessage = "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)";
-        await getPool().query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, errMessage]
-        );
+        await logActivity({
+          userId,
+          serviceId: serviceIdVal,
+          commandType: "ONBOARD",
+          status: "FAILED",
+          errorMessage: errMessage,
+        });
         results.push({ access_id, status: "failed", error: "Missing Project ID or Email" });
         continue;
       }
@@ -358,11 +363,7 @@ async function onboardBigQueryUser(req, res) {
         );
 
         // Insert success log
-        await getPool().query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
-          [userId, serviceIdVal]
-        );
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
 
         console.log(`[BigQuery/IAM] Successfully added ${external_user_identifier} to ${external_account_identifier} with role ${targetRole}.`);
         results.push({ access_id, project: external_account_identifier, role: targetRole, status: "onboarded" });
@@ -372,11 +373,7 @@ async function onboardBigQueryUser(req, res) {
         const errMessage = `${error.message} (Code: ${errCode})`;
 
         // Insert failure log
-        await getPool().query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, errMessage]
-        );
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
         results.push({ access_id, project: external_account_identifier, status: "failed", error: errMessage });
       }
@@ -416,11 +413,7 @@ async function onboardBigQueryUser(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     // Insert overall failure log if applicable
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-      [userId, serviceIdVal, errMessage]
-    );
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
     res.status(500).json({
       success: false,

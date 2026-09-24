@@ -9,9 +9,10 @@
 
 const { Router } = require("express");
 const healthRoutes = require("./health.routes");
+const authRoutes = require("./auth.routes");
+const rolesRoutes = require("./roles.routes");
 const usersRoutes = require("./users.routes");
 const servicesRoutes = require("./services.routes");
-const commandRunsRoutes = require("./commandRuns.routes");
 const googlePlayRoutes = require("./googlePlay.routes");
 const bigQueryRoutes = require("./bigQuery.routes");
 const googleDriveRoutes = require("./googleDrive.routes");
@@ -23,21 +24,32 @@ const kanboardRoutes = require("./kanboard.routes");
 const discordRoutes = require("./discord.routes");
 const adminRoutes = require("./admin.routes");
 
+const requireAuth = require("../middlewares/requireAuth.middleware");
+const requireRole = require("../middlewares/requireRole.middleware");
+
 const router = Router();
 
+// Public routes
 router.use("/health", healthRoutes);
-router.use("/users", usersRoutes);
-router.use("/services", servicesRoutes);
-router.use("/command-runs", commandRunsRoutes);
-router.use("/google-play", googlePlayRoutes);
-router.use("/bigquery", bigQueryRoutes);
-router.use("/google-drive", googleDriveRoutes);
-router.use("/google-analytics", googleAnalyticsRoutes);
-router.use(["/appleStoreConnect", "/appleStoreConnet"], appleStoreConnectRoutes);
-router.use("/google-cloud", googleCloudRoutes);
-router.use("/firebase", firebaseRoutes);
-router.use("/kanboard", kanboardRoutes);
-router.use("/discord", discordRoutes);
+router.use("/auth", authRoutes);
+
+// Protected RBAC routes (Requires minimum OPERATOR role)
+const rbacOperator = [requireAuth, requireRole("OPERATOR")];
+
+router.use("/users", rbacOperator, usersRoutes);
+router.use("/services", rbacOperator, servicesRoutes);
+router.use("/google-play", rbacOperator, googlePlayRoutes);
+router.use("/bigquery", rbacOperator, bigQueryRoutes);
+router.use("/google-drive", rbacOperator, googleDriveRoutes);
+router.use("/google-analytics", rbacOperator, googleAnalyticsRoutes);
+router.use(["/appleStoreConnect", "/appleStoreConnet"], rbacOperator, appleStoreConnectRoutes);
+router.use("/google-cloud", rbacOperator, googleCloudRoutes);
+router.use("/firebase", rbacOperator, firebaseRoutes);
+router.use("/kanboard", rbacOperator, kanboardRoutes);
+router.use("/discord", rbacOperator, discordRoutes);
+
+// Role delegation routes (Requires minimum MANAGER role)
+router.use("/admin/roles", rolesRoutes);
 router.use("/admin", adminRoutes);
 
 module.exports = router;

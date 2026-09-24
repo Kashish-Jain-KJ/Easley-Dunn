@@ -13,24 +13,18 @@ const { getPool } = require("../db/database");
 const { google } = require("googleapis");
 const path = require("path");
 const fs = require("fs");
+const { logActivity } = require("../utils/logUtils");
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
+
+const { getCredentialFilePath } = require("../utils/credentialUtils");
 
 /**
  * Returns an authenticated Google Drive v3 client using the service account
  * JSON key found inside the googledrive_json folder.
  */
 async function getDriveClient() {
-  const folderPath = path.join(__dirname, "../../googledrive_json");
-  let keyFilePath = null;
-
-  if (fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory()) {
-    const files = fs.readdirSync(folderPath);
-    const jsonFile = files.find((f) => f.endsWith(".json"));
-    if (jsonFile) {
-      keyFilePath = path.join(folderPath, jsonFile);
-    }
-  }
+  const keyFilePath = getCredentialFilePath("googledrive_json", ".json");
 
   if (!keyFilePath) {
     throw new Error("No .json credentials file found inside the googledrive_json folder.");
@@ -176,11 +170,13 @@ async function offboardGoogleDriveUser(req, res) {
       console.error(dbErr);
     }
 
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, serviceIdVal, `No active Google Drive access records found for user_id '${userId}'. (Code: 404)`]
-    );
+    await logActivity({
+      userId,
+      serviceId: serviceIdVal,
+      commandType: "OFFBOARD",
+      status: "FAILED",
+      errorMessage: `No active Google Drive access records found for user_id '${userId}'. (Code: 404)`,
+    });
 
     return res.status(404).json({
       success: false,
@@ -196,11 +192,13 @@ async function offboardGoogleDriveUser(req, res) {
   const ownedFiles = await auditOwnedFiles(drive, userEmail);
 
   if (ownedFiles.length > 0) {
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, service_id, `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`]
-    );
+    await logActivity({
+      userId,
+      serviceId: service_id,
+      commandType: "OFFBOARD",
+      status: "FAILED",
+      errorMessage: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`,
+    });
 
     return res.status(409).json({
       success: false,
@@ -229,11 +227,13 @@ async function offboardGoogleDriveUser(req, res) {
       if (!permission) {
         results.push({ folderId, status: "not_found — user may have already lost access" });
 
-        await getPool().query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-          [userId, service_id, `User permission not found on folder '${folderId}' (already removed or deleted).`]
-        );
+        await logActivity({
+          userId,
+          serviceId: service_id,
+          commandType: "OFFBOARD",
+          status: "FAILED",
+          errorMessage: `User permission not found on folder '${folderId}' (already removed or deleted).`,
+        });
         continue;
       }
 
@@ -250,11 +250,7 @@ async function offboardGoogleDriveUser(req, res) {
       );
 
       // Insert success log
-      await getPool().query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
-        [userId, service_id]
-      );
+      await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" });
 
       results.push({ folderId, status: "removed" });
     } catch (error) {
@@ -262,11 +258,13 @@ async function offboardGoogleDriveUser(req, res) {
       const errMessage = `${error.message} (Code: ${errCode})`;
 
       // Insert failure log
-      await getPool().query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userId, service_id, `Folder '${folderId}' deprovisioning failed: ${errMessage}`]
-      );
+      await logActivity({
+        userId,
+        serviceId: service_id,
+        commandType: "OFFBOARD",
+        status: "FAILED",
+        errorMessage: `Folder '${folderId}' deprovisioning failed: ${errMessage}`,
+      });
 
       results.push({ folderId, status: "failed", error: error.message });
     }

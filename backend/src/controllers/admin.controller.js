@@ -1,35 +1,16 @@
 /**
  * @file admin.controller.js
- * @description Cerberus admin login — passwordless, magic-link only. No
- * signup form, no password anywhere. An existing ADMIN invites someone by
- * email; that email is the login.
+ * @description Admin management operations for user role assignment and invitations.
  *
- * TEMPORARY: targets `users_duplicate`, not the real `users` table, while
- * the schema (the "Role" column, last_login_at, cerberus_admin_tokens) is
- * being validated. Swap every `users_duplicate` reference below back to
- * `users` once that validation is done and the real table has the same
- * columns — this file is the only thing that needs to change, the DB side
- * (cerberus_admin_tokens' FK, the real ALTER TABLE) is handled separately.
+ * Targets the primary `users` table (`easleydunn.users`).
+ * Authentication relies on password-based credentials.
  *
  * `"Role"` (quoted, capitalized — Postgres enum easleydunn."Roles") is NULL
- * for a normal tracked employee, or one of ADMIN | DEV | TEMP for a Cerberus
- * admin. NULL and TEMP behave identically until existing endpoints are
- * gated in a later pass — that gating is explicitly out of scope here.
+ * for a normal tracked employee, or one of ADMIN | DEV | TEMP | MEMBER.
  *
- * POST /admin/invite → ADMIN-only. Sets/updates a user's Role, issues a
- *                       single-use magic-link token, emails it.
- * GET  /admin/login  → validates the token, marks it used, issues a session
- *                       cookie (JWT, 7 days), redirects into the dashboard.
+ * POST /admin/invite → ADMIN-only. Sets/updates a user's Role.
  * GET  /admin/me     → returns the current session's identity.
  * POST /admin/logout → clears the session cookie.
- *
- * Required env:
- * AUTH_JWT_SECRET
- * MAIL_SMTP_HOSTNAME / MAIL_SMTP_PORT / MAIL_SMTP_USERNAME / MAIL_SMTP_PASSWORD / MAIL_FROM
- *   (already configured for kanboard.controller.js / discord.controller.js — reused here)
- *
- * Optional env:
- * ADMIN_MAGIC_LINK_TTL_MINUTES (default 30)
  */
 
 "use strict";
@@ -39,6 +20,7 @@ const jwt = require("jsonwebtoken");
 const { getPool } = require("../db/database");
 const { getMailTransporter } = require("../utils/mail");
 const ApiError = require("../utils/ApiError");
+const { splitName } = require("../utils/userUtils");
 
 const VALID_ROLES = ["ADMIN", "DEV", "TEMP"];
 const SESSION_TTL_DAYS = 7;
@@ -53,13 +35,6 @@ function getAppBaseUrl() {
 
 function hashToken(rawToken) {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
-}
-
-function splitName(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return { first_name: "", last_name: "" };
-  if (parts.length === 1) return { first_name: parts[0], last_name: "" };
-  return { first_name: parts[0], last_name: parts.slice(1).join(" ") };
 }
 
 async function sendMagicLinkEmail(toEmail, loginUrl) {
@@ -106,7 +81,7 @@ async function inviteAdmin(req, res) {
   const pool = getPool();
 
   const { rows: existingRows } = await pool.query(
-    `SELECT user_id FROM users_duplicate WHERE email = $1`,
+    `SELECT user_id FROM easleydunn.users WHERE email = $1`,
     [email]
   );
 
@@ -114,13 +89,13 @@ async function inviteAdmin(req, res) {
   if (existingRows.length > 0) {
     userId = existingRows[0].user_id;
     await pool.query(
-      `UPDATE users_duplicate SET "Role" = $1 WHERE user_id = $2`,
+      `UPDATE easleydunn.users SET "Role" = $1 WHERE user_id = $2`,
       [role, userId]
     );
   } else {
     const { first_name, last_name } = splitName(name);
     const { rows: insertedRows } = await pool.query(
-      `INSERT INTO users_duplicate (first_name, last_name, email, is_active, "Role")
+      `INSERT INTO easleydunn.users (first_name, last_name, email, is_active, "Role")
        VALUES ($1, $2, $3, true, $4)
        RETURNING user_id`,
       [first_name, last_name, email, role]
@@ -173,7 +148,7 @@ async function loginWithMagicLink(req, res) {
   const { rows } = await pool.query(
     `SELECT t.token_id, t.user_id, t.expires_at, t.used_at, u.email, u."Role"
      FROM cerberus_admin_tokens t
-     JOIN users_duplicate u ON u.user_id = t.user_id
+     JOIN easleydunn.users u ON u.user_id = t.user_id
      WHERE t.token_hash = $1`,
     [tokenHash]
   );
@@ -197,7 +172,7 @@ async function loginWithMagicLink(req, res) {
     [record.token_id]
   );
   await pool.query(
-    `UPDATE users_duplicate SET last_login_at = NOW() WHERE user_id = $1`,
+    `UPDATE easleydunn.users SET last_login_at = NOW() WHERE user_id = $1`,
     [record.user_id]
   );
 

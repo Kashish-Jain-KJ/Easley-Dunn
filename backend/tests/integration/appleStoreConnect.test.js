@@ -129,7 +129,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
         return Promise.resolve({ rows: [] });
       }
       if (text.includes("INSERT INTO log")) {
-        successLogged = text.includes("'SUCCESS'");
+        successLogged = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
         return Promise.resolve({ rows: [] });
       }
       return Promise.resolve({ rows: [] });
@@ -203,10 +203,8 @@ describe("POST /appleStoreConnect/users/:userId", () => {
         return Promise.resolve({ rows: [{ access_id: 100 }] });
       }
       if (text.includes("INSERT INTO log")) {
-        failureLogged = text.includes("'FAILED'");
-        // Log query params are user_id, service_id, command_type, status, error_message, created_at
-        // In the controller: pool.query(..., [userIdInt, serviceIdVal, errMessage])
-        loggedErrorMessage = params[2]; // Index 2 is $3 (error_message)
+        failureLogged = params && (params.includes("FAILED") || params[3] === "FAILED");
+        loggedErrorMessage = (params && (params[4] || params[2])) || "";
         return Promise.resolve({ rows: [] });
       }
       return Promise.resolve({ rows: [] });
@@ -254,7 +252,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
         return Promise.resolve({ rows: [{ access_id: 100 }] });
       }
       if (text.includes("INSERT INTO log")) {
-        failureLogged = text.includes("'FAILED'");
+        failureLogged = params && (params.includes("FAILED") || params[3] === "FAILED");
         return Promise.resolve({ rows: [] });
       }
       return Promise.resolve({ rows: [] });
@@ -298,7 +296,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
           return Promise.resolve({ rows: [] }); // No active access
         }
         if (text.includes("INSERT INTO log")) {
-          loggedFailure = text.includes("'FAILED'");
+          loggedFailure = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -366,7 +364,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
           return Promise.resolve({ rows: [] });
         }
         if (text.includes("INSERT INTO log")) {
-          logSuccess = text.includes("'SUCCESS'");
+          logSuccess = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -443,7 +441,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
           return Promise.resolve({ rows: [] });
         }
         if (text.includes("INSERT INTO log")) {
-          logSuccess = text.includes("'SUCCESS'");
+          logSuccess = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -486,7 +484,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
           return Promise.resolve({ rows: [{ access_id: 100, external_user_identifier: "test-apple-user@example.com" }] });
         }
         if (text.includes("INSERT INTO log")) {
-          logFailure = text.includes("'FAILED'");
+          logFailure = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });

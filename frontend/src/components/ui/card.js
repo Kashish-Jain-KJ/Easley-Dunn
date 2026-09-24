@@ -14,9 +14,10 @@ function CardHeader({
 }
 function CardTitle({
   className,
+  children,
   ...props
 }) {
-  return <h4 data-slot="card-title" className={cn("leading-none", className)} {...props} />;
+  return <h4 data-slot="card-title" className={cn("leading-none", className)} {...props}>{children}</h4>;
 }
 function CardDescription({
   className,

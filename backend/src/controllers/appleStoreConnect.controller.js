@@ -6,6 +6,7 @@
 "use strict";
 
 const { getPool } = require("../db/database");
+const { logActivity } = require("../utils/logUtils");
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
@@ -56,26 +57,17 @@ function generateAppleJWT(privateKeyPem, keyId, issuerId) {
   return `${headerB64}.${payloadB64}.${signatureB64}`;
 }
 
+const { readRawCredential } = require("../utils/credentialUtils");
+
 /**
  * Helper to load the private key from the apple_key directory or env variables.
  */
 function getApplePrivateKey() {
-  // If private key is configured as string in env, use it directly (e.g. for testing)
   if (process.env.APPLE_PRIVATE_KEY) {
     return process.env.APPLE_PRIVATE_KEY.replace(/\\n/g, "\n");
   }
 
-  const folderPath = path.join(__dirname, "../../apple_key");
-  if (fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory()) {
-    const files = fs.readdirSync(folderPath);
-    const p8File = files.find((f) => f.endsWith(".p8"));
-    if (p8File) {
-      const keyFilePath = path.join(folderPath, p8File);
-      return fs.readFileSync(keyFilePath, "utf8");
-    }
-  }
-
-  return null;
+  return readRawCredential("apple_key", ".p8");
 }
 
 /**
@@ -139,13 +131,7 @@ async function onboardAppleStoreConnectUser(req, res) {
     const privateKey = getApplePrivateKey();
     if (!privateKey) {
       const errMessage = "No .p8 credentials file found inside the apple_key folder.";
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
       return res.status(500).json({
         success: false,
         message: errMessage,
@@ -180,13 +166,7 @@ async function onboardAppleStoreConnectUser(req, res) {
     } catch (jwtErr) {
       console.error("JWT signing failed:", jwtErr);
       const errMessage = `JWT creation failed: ${jwtErr.message}`;
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
       return res.status(500).json({
         success: false,
         message: errMessage,
@@ -223,13 +203,7 @@ async function onboardAppleStoreConnectUser(req, res) {
       
       const errMessage = `${errDetail} (Code: ${response.status})`;
 
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
       return res.status(response.status || 500).json({
         success: false,
@@ -250,13 +224,7 @@ async function onboardAppleStoreConnectUser(req, res) {
       );
     }
 
-    if (serviceIdVal) {
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
-        [userIdInt, serviceIdVal]
-      );
-    }
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
 
     return res.status(201).json({
       success: true,
@@ -269,13 +237,7 @@ async function onboardAppleStoreConnectUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    if (serviceIdVal) {
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-        [userIdInt, serviceIdVal, errMessage]
-      );
-    }
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
     return res.status(500).json({
       success: false,
@@ -330,13 +292,7 @@ async function offboardAppleStoreConnectUser(req, res) {
 
     if (accessRows.length === 0) {
       const errMessage = `Apple Store Connect access record not found or already inactive for user_id '${userIdInt}'.`;
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
       return res.status(404).json({
         success: false,
         message: errMessage,
@@ -349,13 +305,7 @@ async function offboardAppleStoreConnectUser(req, res) {
     const privateKey = getApplePrivateKey();
     if (!privateKey) {
       const errMessage = "No .p8 credentials file found inside the apple_key folder.";
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
       return res.status(500).json({
         success: false,
         message: errMessage,
@@ -404,13 +354,7 @@ async function offboardAppleStoreConnectUser(req, res) {
 
     if (!appleUserId) {
       const errMessage = `User ${userEmail} not found in Apple Store Connect active members or pending invitations.`;
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
       return res.status(404).json({
         success: false,
         message: errMessage,
@@ -435,13 +379,7 @@ async function offboardAppleStoreConnectUser(req, res) {
 
       const errMessage = `${errDetail} (Code: ${deleteResponse.status})`;
 
-      if (serviceIdVal) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-          [userIdInt, serviceIdVal, errMessage]
-        );
-      }
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
 
       return res.status(deleteResponse.status || 500).json({
         success: false,
@@ -459,13 +397,7 @@ async function offboardAppleStoreConnectUser(req, res) {
       [access_id]
     );
 
-    if (serviceIdVal) {
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
-        [userIdInt, serviceIdVal]
-      );
-    }
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
 
     return res.json({
       success: true,
@@ -477,13 +409,7 @@ async function offboardAppleStoreConnectUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    if (serviceIdVal) {
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userIdInt, serviceIdVal, errMessage]
-      );
-    }
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
 
     return res.status(500).json({
       success: false,

@@ -206,15 +206,23 @@ Request Flow Pattern:
 
 Base URL: `http://localhost:5001` (mounted at `/`)
 
-| Method | Endpoint | Purpose | Request Body / Params | Response | Handler |
+| Method | Endpoint | Purpose | Request Body / Params | Response | Handler / Middleware |
 | --- | --- | --- | --- | --- | --- |
 | `GET` | `/health` | Server health check | None | `{ success: true, timestamp, uptime }` | `health.routes.js` |
-| `GET` | `/users` | List all users | None | `{ success: true, count, data: [...] }` | `getUsers` |
-| `GET` | `/users/:userId/access` | Get active access records | Params: `userId` | `{ success: true, userId, count, data: [...] }` | `getUserAccess` |
-| `GET` | `/users/:userId/logs` | Get execution logs & summary | Params: `userId` | `{ success: true, userId, count, summary, data }` | `getUserLogs` |
+| `POST` | `/auth/login` | Authenticate user with password | `{ email, password }` | `{ success: true, user }` (Sets session cookie) | `passwordAuth.controller.js` |
+| `POST` | `/auth/logout` | Clear session cookie | None | `{ success: true, message }` | `passwordAuth.controller.js` |
+| `GET` | `/auth/me` | Fetch currently logged in user session | None (Cookie required) | `{ success: true, user }` | `passwordAuth.controller.js` |
+| `POST` | `/admin/roles/grant` | Grant / update user role & initial password | `{ email, name?, role, password? }` | `{ success: true, message, emailSent, user }` | `roles.controller.js` (`requireAuth`, `requireRole`) |
+| `GET` | `/admin/roles/users` | List all users and assigned roles | None | `{ success: true, count, users: [...] }` | `roles.controller.js` (`requireAuth`, `requireRole`) |
+| `PATCH` | `/admin/roles/:userId/status` | Toggle user active / inactive status | Params: `userId` | `{ success: true, message, user }` | `roles.controller.js` (`requireAuth`, `requireRole`) |
+| `DELETE` | `/admin/roles/:userId` | Revoke user console role access | Params: `userId` | `{ success: true, message }` | `roles.controller.js` (`requireAuth`, `requireRole`) |
+| `GET` | `/users` | List all tracked system users | None | `{ success: true, count, data: [...] }` | `getUsers` |
+| `POST` | `/users` | Register new tracked system employee | `{ first_name, last_name, email }` | `{ success: true, message, data }` | `createSystemUser` |
+| `GET` | `/users/:userId/access` | Get active access records for user | Params: `userId` | `{ success: true, userId, count, data: [...] }` | `getUserAccess` |
+| `GET` | `/users/:userId/logs` | Get execution logs & summary for user | Params: `userId` | `{ success: true, userId, count, summary, data }` | `getUserLogs` |
 | `POST` | `/users/:userId/access/:accessId/onboard` | Manually activate access | Params: `userId`, `accessId` | `{ success: true, message }` | `onboardUserAccess` |
 | `POST` | `/users/:userId/access/:accessId/offboard` | Manually deactivate access | Params: `userId`, `accessId` | `{ success: true, message }` | `offboardUserAccess` |
-| `GET` | `/services` | List all available services | None | `{ success: true, count, data: [...] }` | `getServices` |
+| `GET` | `/services` | List all available services | None | `{ success: true, count, data: [...] }` | `getAllServices` |
 | `POST` | `/google-play/users/:userId` | Onboard to Google Play | Params: `userId` | `{ success: true, message, data }` | `onboardGooglePlayUser` |
 | `DELETE` | `/google-play/users/:userId` | Offboard from Google Play | Params: `userId` | `{ success: true, message }` | `removeGooglePlayUser` |
 | `POST` | `/appleStoreConnect/users/:userId` | Onboard to Apple Store Connect | Params: `userId` | `{ success: true, message, data }` | `onboardAppleStoreConnectUser` |
@@ -232,17 +240,29 @@ Base URL: `http://localhost:5001` (mounted at `/`)
 | `DELETE` | `/firebase/users/:userId` | Offboard from Firebase Auth | Params: `userId` | `{ success: true, message }` | `removeFirebaseUser` |
 | `POST` | `/kanboard/users/:userId` | Onboard to Kanboard | Params: `userId` | `{ success: true, message, data }` | `onboardKanboardUser` |
 | `DELETE` | `/kanboard/users/:userId` | Offboard from Kanboard | Params: `userId` | `{ success: true, message, data }` | `offboardKanboardUser` |
+| `POST` | `/discord/users/:userId` | Onboard to Discord Guild | Params: `userId` | `{ success: true, message, data }` | `onboardDiscordUser` |
+| `DELETE` | `/discord/users/:userId` | Offboard from Discord Guild | Params: `userId` | `{ success: true, message }` | `offboardDiscordUser` |
 
 ---
 
 ## 9. Authentication and Authorization
 
 ### Internal Authentication & Authorization
-*Confirmed by Code:* Cerberus currently operates in an administrative console mode. HTTP requests do not require bearer JWT authentication from the browser client. Security is enforced via network isolation, CORS origin restrictions (`CORS_ORIGINS`), and rate-limiting.
+Cerberus features full **Password-Based Authentication** and **Role-Based Access Control (RBAC)**:
 
-> [!IMPORTANT]
-> **Known Development Limitation & Planned Controls:**
-> At present, most integration endpoints are not protected by authentication or admin authorization. The login page and admin authorization flow (e.g., magic link JWT authentication via `AUTH_JWT_SECRET`) will be added after the current integration development work is completed. Documenting these planned controls clarifies the current pre-production security posture.
+1. **Authentication Flow (`/auth/login`):**
+   - Users authenticate with email and password.
+   - Passwords are validated using `bcrypt` (Cost Factor 12 + Pepper).
+   - Upon successful verification, an HTTP-Only signed JWT session cookie (`session=...`) is generated and attached to the response.
+2. **Session Verification Middleware (`requireAuth.middleware.js`):**
+   - Intercepts incoming requests, decodes and verifies the JWT `session` cookie.
+   - Attaches user context (`req.user = { userId, email, role }`) to request.
+3. **Role-Based Access Control Middleware (`requireRole.middleware.js`):**
+   - Enforces four-tier role hierarchy:
+     - **Super Admin (`ADMIN`) [Tier 1]**: Full system access, role delegation & user management.
+     - **Access Manager (`MANAGER`) [Tier 2]**: Manage software access & delegate Operator privileges.
+     - **Access Operator (`OPERATOR`) [Tier 3]**: Onboard & offboard employees across integrations.
+     - **Standard Member (`MEMBER`) [Tier 4]**: System employee tracked for software onboarding/offboarding. Standard Members **do not have Cerberus Console login access** and do not require password setup.
 
 ### External API Authentication Mechanisms
 
@@ -292,6 +312,7 @@ erDiagram
     services ||--o{ user_service_access : "defines access"
     users ||--o{ log : "executes activity"
     services ||--o{ log : "relates to"
+    users ||--o{ cerberus_admin_tokens : "receives tokens"
 
     users {
         int user_id PK
@@ -300,6 +321,10 @@ erDiagram
         string email
         boolean is_active
         timestamp start_date
+        string Role
+        timestamp last_login_at
+        string password_hash
+        boolean requires_password_change
     }
 
     services {
@@ -328,6 +353,15 @@ erDiagram
         string command_type
         string status
         string error_message
+        timestamp created_at
+    }
+
+    cerberus_admin_tokens {
+        int token_id PK
+        int user_id FK
+        string token_hash
+        timestamp expires_at
+        timestamp used_at
         timestamp created_at
     }
 ```
@@ -612,3 +646,40 @@ Follow this sequence when starting on Cerberus:
 | Firebase Auth | Complete | Covered in master & dedicated doc |
 | Kanboard | Complete | Covered in master & dedicated doc |
 | Discord | Complete | Covered in master & dedicated doc |
+
+---
+
+## 29. Centralized Utilities, Access Governance & Logging Architecture
+
+### Central Audit Logger Utility (`logUtils.js`)
+Cerberus standardizes all audit log creation via a centralized helper function:
+```javascript
+const { logActivity } = require("../utils/logUtils");
+
+await logActivity({
+  userId: 42,
+  serviceId: 3,
+  commandType: "ONBOARD", // or "OFFBOARD"
+  status: "SUCCESS",      // or "FAILED"
+  errorMessage: null,     // or error string
+});
+```
+- **Database Schema**: Inserts directly into `log (user_id, service_id, command_type, status, error_message, created_at)`.
+- **Controllers Refactored**: 100% of integration controllers (`googlePlay`, `bigQuery`, `googleDrive`, `kanboard`, `appleStoreConnect`, `firebase`, `googleCloud`, `discord`, `googleAnalytics`, `users`) use `logActivity`.
+
+### Centralized Credential Loader Utility (`credentialUtils.js`)
+To eliminate duplicate directory-scanning boilerplate across integration controllers:
+- `getCredentialFilePath(folderName, extension)`: Scans relative key folder and returns absolute path.
+- `readJsonCredential(folderName)`: Parses JSON key file content into an object.
+- `readRawCredential(folderName, extension)`: Reads raw key file content (e.g. Apple `.p8` private keys).
+
+### Active Access Protection & Role Governance Rules
+Enforced in `roles.controller.js`:
+1. **Active Access Protection**: A user cannot be deactivated (`is_active = false`) if they currently hold active software access permissions (`is_active = true` in `user_service_access`). Attempts to deactivate return `400 Bad Request`.
+2. **Default Role Reset**: Deactivating an active user automatically resets their system role (`Role`) to `MEMBER`.
+3. **UI Action Boundaries**: The Edit button is hidden for inactive users, and the Delete user action button is completely removed to prevent accidental data loss.
+
+### Input Validation & Test Suite Architecture
+- **Validation Middleware (`validateInput.middleware.js`)**: Provides `validateIntegerParams(...params)` to validate route parameters (such as `userId`) prior to controller invocation.
+- **Integration Test Suite**: Complete automated test coverage running under `npm test` with Jest & Supertest across 7 test suites (66 tests) with 100% passing status.
+

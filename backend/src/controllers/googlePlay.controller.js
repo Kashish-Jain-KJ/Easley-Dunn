@@ -11,6 +11,7 @@ const { getPool } = require("../db/database");
 const { google } = require("googleapis");
 const path = require("path");
 const fs = require("fs");
+const { logActivity } = require("../utils/logUtils");
 
 /**
  * DELETE /google-play/users/:userId
@@ -39,11 +40,13 @@ async function removeGooglePlayUser(req, res) {
       console.error(dbErr);
     }
 
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, serviceIdVal, `Google Play access record not found for user_id '${userId}'. (Code: 404)`]
-    );
+    await logActivity({
+      userId,
+      serviceId: serviceIdVal,
+      commandType: "OFFBOARD",
+      status: "FAILED",
+      errorMessage: `Google Play access record not found for user_id '${userId}'. (Code: 404)`,
+    });
 
     return res.status(404).json({
       success: false,
@@ -54,11 +57,13 @@ async function removeGooglePlayUser(req, res) {
   const { external_account_identifier, external_user_identifier, service_id } = accessRows[0];
 
   if (!external_account_identifier || !external_user_identifier) {
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, service_id, "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)"]
-    );
+    await logActivity({
+      userId,
+      serviceId: service_id,
+      commandType: "OFFBOARD",
+      status: "FAILED",
+      errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)",
+    });
 
     return res.status(400).json({
       success: false,
@@ -82,11 +87,7 @@ async function removeGooglePlayUser(req, res) {
     );
 
     // Insert success log
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
-      [userId, service_id]
-    );
+    await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" });
 
     res.json({
       success: true,
@@ -99,11 +100,7 @@ async function removeGooglePlayUser(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     // Insert failure log
-    await getPool().query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, service_id, errMessage]
-    );
+    await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
 
     res.status(500).json({
       success: false,
@@ -232,11 +229,7 @@ async function onboardGooglePlayUser(req, res) {
       }
 
       // 5. Insert success log
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
-         [userIdInt, serviceIdVal]
-      );
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
     }
 
     res.status(201).json({
@@ -250,14 +243,7 @@ async function onboardGooglePlayUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    if (serviceIdVal) {
-      // Insert failure log
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-        [userIdInt, serviceIdVal, errMessage]
-      );
-    }
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
     res.status(500).json({
       success: false,
@@ -270,17 +256,10 @@ async function onboardGooglePlayUser(req, res) {
 /**
  * Helper function to instantiate an authenticated androidpublisher client.
  */
-async function getGooglePlayClient() {
-  const folderPath = path.join(__dirname, "../../googleplay_json");
-  let keyFilePath = null;
+const { getCredentialFilePath } = require("../utils/credentialUtils");
 
-  if (fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory()) {
-    const files = fs.readdirSync(folderPath);
-    const jsonFile = files.find(f => f.endsWith(".json"));
-    if (jsonFile) {
-      keyFilePath = path.join(folderPath, jsonFile);
-    }
-  }
+async function getGooglePlayClient() {
+  const keyFilePath = getCredentialFilePath("googleplay_json", ".json");
 
   if (!keyFilePath) {
     throw new Error("No .json credentials file found inside the googleplay_json folder.");

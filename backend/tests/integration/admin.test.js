@@ -95,10 +95,10 @@ describe("Cerberus admin login", () => {
       let tokenInserted = false;
 
       pool.query = jest.fn().mockImplementation((text, params) => {
-        if (text.includes("SELECT user_id FROM users_duplicate WHERE email")) {
+        if (text.includes("SELECT user_id FROM easleydunn.users WHERE email")) {
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO users_duplicate")) {
+        if (text.includes("INSERT INTO easleydunn.users")) {
           insertedUserRole = params[3];
           return Promise.resolve({ rows: [{ user_id: 42 }] });
         }
@@ -133,10 +133,10 @@ describe("Cerberus admin login", () => {
       let roleUpdated = false;
 
       pool.query = jest.fn().mockImplementation((text, params) => {
-        if (text.includes("SELECT user_id FROM users_duplicate WHERE email")) {
+        if (text.includes("SELECT user_id FROM easleydunn.users WHERE email")) {
           return Promise.resolve({ rows: [{ user_id: 7 }] });
         }
-        if (text.includes('UPDATE users_duplicate SET "Role"')) {
+        if (text.includes('UPDATE easleydunn.users SET "Role"')) {
           roleUpdated = params[0] === "ADMIN";
           return Promise.resolve({ rows: [] });
         }

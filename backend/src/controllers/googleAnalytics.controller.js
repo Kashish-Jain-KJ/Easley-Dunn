@@ -15,6 +15,7 @@
 "use strict";
 
 const { getPool } = require("../db/database");
+const { logActivity } = require("../utils/logUtils");
 const { GoogleAuth } = require("google-auth-library");
 const path = require("path");
 const fs = require("fs");
@@ -23,21 +24,14 @@ const GA_SCOPES = [
   "https://www.googleapis.com/auth/analytics.manage.users",
 ];
 
+const { getCredentialFilePath } = require("../utils/credentialUtils");
+
 /**
  * Service-account only.
  * Reads JSON key from googleanalytics_json folder.
  */
 async function getGoogleAnalyticsClient() {
-  const folderPath = path.join(__dirname, "../../googleanalytics_json");
-  let keyFilePath = null;
-
-  if (fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory()) {
-    const files = fs.readdirSync(folderPath);
-    const jsonFile = files.find((f) => f.endsWith(".json"));
-    if (jsonFile) {
-      keyFilePath = path.join(folderPath, jsonFile);
-    }
-  }
+  const keyFilePath = getCredentialFilePath("googleanalytics_json", ".json");
 
   if (!keyFilePath) {
     throw new Error("No .json credentials file found inside the googleanalytics_json folder.");
@@ -245,11 +239,7 @@ async function addGoogleAnalyticsUser(req, res) {
       );
 
       if (userRows.length === 0) {
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, `User not found with user_id '${userId}'.`]
-        );
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: `User not found with user_id '${userId}'.` });
         return res.status(404).json({
           success: false,
           message: `User not found with user_id '${userId}'.`,
@@ -278,11 +268,7 @@ async function addGoogleAnalyticsUser(req, res) {
 
       if (!external_account_identifier) {
         const errMessage = "Missing external_account_identifier. (Code: 400)";
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, errMessage]
-        );
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
         results.push({ access_id, status: "failed", error: errMessage });
         continue;
       }
@@ -322,11 +308,7 @@ async function addGoogleAnalyticsUser(req, res) {
           [bindingName, access_id]
         );
 
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'SUCCESS', NULL, NOW())`,
-          [userId, serviceIdVal]
-        );
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
 
         results.push({ access_id, parentResource: external_account_identifier, bindingName, status: "onboarded" });
       } catch (error) {
@@ -334,11 +316,7 @@ async function addGoogleAnalyticsUser(req, res) {
         const errCode = error.code || error.status || "500";
         const errMessage = `${error.message} (Code: ${errCode})`;
 
-        await pool.query(
-          `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-           VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-          [userId, serviceIdVal, errMessage]
-        );
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
         results.push({ access_id, status: "failed", error: errMessage });
       }
@@ -375,11 +353,7 @@ async function addGoogleAnalyticsUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await pool.query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'ONBOARD', 'FAILED', $3, NOW())`,
-      [userId, serviceIdVal, errMessage]
-    );
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
 
     return res.status(500).json({
       success: false,
@@ -425,11 +399,7 @@ async function removeGoogleAnalyticsUser(req, res) {
         console.error(dbErr);
       }
 
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userId, serviceIdVal, `Active Google Analytics access record not found for user_id '${userId}'. (Code: 404)`]
-      );
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `Active Google Analytics access record not found for user_id '${userId}'. (Code: 404)` });
 
       return res.status(404).json({
         success: false,
@@ -441,11 +411,7 @@ async function removeGoogleAnalyticsUser(req, res) {
     serviceIdVal = service_id;
 
     if (!external_account_identifier) {
-      await pool.query(
-        `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-         VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-        [userId, serviceIdVal, "Missing external_account_identifier. (Code: 400)"]
-      );
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: "Missing external_account_identifier. (Code: 400)" });
 
       return res.status(400).json({
         success: false,
@@ -472,11 +438,7 @@ async function removeGoogleAnalyticsUser(req, res) {
       [access_id]
     );
 
-    await pool.query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'SUCCESS', NULL, NOW())`,
-      [userId, serviceIdVal]
-    );
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
 
     return res.json({
       success: true,
@@ -502,11 +464,7 @@ async function removeGoogleAnalyticsUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await pool.query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, created_at)
-       VALUES ($1, $2, 'OFFBOARD', 'FAILED', $3, NOW())`,
-      [userId, serviceIdVal, errMessage]
-    );
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
 
     return res.status(500).json({
       success: false,

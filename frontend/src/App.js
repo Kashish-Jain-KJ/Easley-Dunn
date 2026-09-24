@@ -1,4 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { GoogleOAuthProvider } from "@react-oauth/google";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import LoginPage from "./components/LoginPage";
+import RoleManagementCard from "./components/RoleManagementCard";
+import ResetPasswordModal from "./components/ResetPasswordModal";
 import Header from "./components/Header";
 import UserList from "./components/UserList";
 import UserInfoCard from "./components/UserInfoCard";
@@ -7,10 +12,16 @@ import OffboardAccessCard from "./components/OffboardAccessCard";
 import ConfirmModal from "./components/ConfirmModal";
 import ToastContainer from "./components/ToastContainer";
 import ActivityLogsCard from "./components/ActivityLogsCard";
+import { fetchWithAuth } from "./utils/fetchWithAuth";
+import { Users, ShieldCheck, RefreshCw } from "lucide-react";
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
+const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "1000000000000-dummyclientid.apps.googleusercontent.com";
 
-export default function App() {
+function MainDashboard() {
+  const { role, isAuthenticated, requiresPasswordChange, isLoading: isAuthLoading } = useAuth();
+  const [activeTab, setActiveTab] = useState("access"); // "access" | "roles"
+
   const [users, setUsers] = useState([]);
   const [services, setServices] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -36,6 +47,8 @@ export default function App() {
     permissions: [],
     userName: ""
   });
+
+  const canManageRoles = role === "ADMIN" || role === "MANAGER";
 
   const showToast = useCallback((toast) => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
@@ -71,7 +84,7 @@ export default function App() {
 
   const fetchUserAccesses = useCallback(async (userId) => {
     try {
-      const res = await fetch(`${API_URL}/users/${userId}/access`);
+      const res = await fetchWithAuth(`${API_URL}/users/${userId}/access`);
       const json = await res.json();
       if (json.success) {
         const activeAccesses = json.data.map(item => {
@@ -98,7 +111,7 @@ export default function App() {
 
   const fetchDiscordStatus = useCallback(async (userId) => {
     try {
-      const res = await fetch(`${API_URL}/discord/users/${userId}/status`);
+      const res = await fetchWithAuth(`${API_URL}/discord/users/${userId}/status`);
       const json = await res.json();
       setDiscordStatus(json.success ? json : null);
     } catch (err) {
@@ -111,7 +124,7 @@ export default function App() {
     if (!userId) return;
     setIsLogsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/users/${userId}/logs`);
+      const res = await fetchWithAuth(`${API_URL}/users/${userId}/logs`);
       const json = await res.json();
       if (json.success) {
         setUserLogs(json.data || []);
@@ -124,23 +137,26 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch(`${API_URL}/users`);
-        const json = await res.json();
-        if (json.success) {
-          setUsers(json.data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch users", err);
-      } finally {
-        setIsLoading(false);
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(`${API_URL}/users`);
+      const json = await res.json();
+      if (json.success) {
+        setUsers(json.data);
       }
-    };
+    } catch (err) {
+      console.error("Failed to fetch users", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
     const fetchServices = async () => {
       try {
-        const res = await fetch(`${API_URL}/services`);
+        const res = await fetchWithAuth(`${API_URL}/services`);
         const json = await res.json();
         if (json.success) {
           setServices(json.data);
@@ -151,7 +167,7 @@ export default function App() {
     };
     fetchUsers();
     fetchServices();
-  }, []);
+  }, [isAuthenticated, fetchUsers]);
 
   const handleManualAccessToggle = useCallback((access) => {
     setManualAccess(prev => {
@@ -199,307 +215,220 @@ export default function App() {
       let endpoint = "";
       let method = "DELETE";
 
-      if (isAutomate) {
-        if (serviceCode === "GOOGLE_PLAY_CONSOLE") {
-          endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "BIG_QUERY") {
-          endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "GOOGLE_DRIVE") {
-          endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "GOOGLE_ANALYTICS") {
-          endpoint = `${API_URL}/google-analytics/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "APPLE_STORE_CONNECT") {
-          endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "GOOGLE_CLOUD") {
-          endpoint = `${API_URL}/google-cloud/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "FIREBASE") {
-          endpoint = `${API_URL}/firebase/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "KANBOARD") {
-          endpoint = `${API_URL}/kanboard/users/${selectedUser.user_id}`;
-        } else if (serviceCode === "DISCORD") {
-          endpoint = `${API_URL}/discord/users/${selectedUser.user_id}`;
-        } else {
-          showToast({
-            type: "offboard",
-            isAutomate,
-            success: false,
-            title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
-            subtitle: "Error: No endpoint created",
-            details: []
-          });
-          return { name: serviceName, success: false };
-        }
+      if (serviceCode === "GOOGLE_PLAY_CONSOLE") {
+        endpoint = `${API_URL}/google-play/users/${selectedUser.id}`;
+      } else if (serviceCode === "BIG_QUERY") {
+        endpoint = `${API_URL}/bigquery/users/${selectedUser.id}`;
+      } else if (serviceCode === "GOOGLE_DRIVE") {
+        endpoint = `${API_URL}/google-drive/users/${selectedUser.id}`;
+      } else if (serviceCode === "GOOGLE_ANALYTICS") {
+        endpoint = `${API_URL}/google-analytics/users/${selectedUser.id}`;
+      } else if (serviceCode === "APPLE_STORE_CONNECT") {
+        endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.id}`;
+      } else if (serviceCode === "GOOGLE_CLOUD") {
+        endpoint = `${API_URL}/google-cloud/users/${selectedUser.id}`;
+      } else if (serviceCode === "FIREBASE") {
+        endpoint = `${API_URL}/firebase/users/${selectedUser.id}`;
+      } else if (serviceCode === "KANBOARD") {
+        endpoint = `${API_URL}/kanboard/users/${selectedUser.id}`;
+      } else if (serviceCode === "DISCORD") {
+        endpoint = `${API_URL}/discord/users/${selectedUser.id}`;
       } else {
-        showToast({
-          type: "offboard",
-          isAutomate,
-          success: false,
-          title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
-          subtitle: "Error: No endpoint created",
-          details: []
-        });
-        return { name: serviceName, success: false };
+        endpoint = `${API_URL}/users/${selectedUser.id}/access/${accessRecord.access_id}`;
       }
 
       try {
-        const response = await fetch(endpoint, {
-          method: method
-        });
+        const response = await fetchWithAuth(endpoint, { method });
         const data = await response.json();
-        const success = response.ok && data.success;
-
+        const isSuccess = response.ok && data.success;
         showToast({
           type: "offboard",
           isAutomate,
-          success,
-          title: success
-            ? `${serviceName} Permission successfully revoked from ${selectedUser.name}`
+          success: isSuccess,
+          title: isSuccess
+            ? `Successfully Revoked "${serviceName}" Permission from ${selectedUser.name}`
             : `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
-          subtitle: success
-            ? `${isAutomate ? "Automated" : "Manual"} offboarding complete`
-            : `Error: ${data.message || "Failed to offboard"}`,
-          details: []
+          subtitle: isSuccess ? (data.message || "") : (data.message || data.error || "Unknown error"),
+          details: data.data || []
         });
-
-        return { name: serviceName, success };
+        return { name: serviceName, success: isSuccess };
       } catch (err) {
         showToast({
           type: "offboard",
           isAutomate,
           success: false,
           title: `Failed to revoke "${serviceName}" Permission from ${selectedUser.name}`,
-          subtitle: `Error: ${err.message || "Network error"}`,
+          subtitle: `Error: ${err.message}`,
           details: []
         });
         return { name: serviceName, success: false };
       }
     });
 
-    const results = await Promise.all(promises);
-    const successful = results.filter(r => r.success);
-
-    if (successful.length > 0) {
-      const successfulNames = successful.map(r => r.name);
-
-      // Update sets
-      if (isAutomate) {
-        setAutomateAccess(prev => {
-          const newAutomateAccess = new Set(prev);
-          successfulNames.forEach(name => newAutomateAccess.delete(name));
-          return newAutomateAccess;
-        });
-      } else {
-        setManualAccess(prev => {
-          const newManualAccess = new Set(prev);
-          successfulNames.forEach(name => newManualAccess.delete(name));
-          return newManualAccess;
-        });
-      }
-
-      await fetchUserAccesses(selectedUser.user_id);
-      await fetchUserLogs(selectedUser.user_id);
-    }
-
+    await Promise.all(promises);
     setIsOffboarding(false);
-  }, [selectedUser, userAccesses, fetchUserAccesses, fetchUserLogs, showToast]);
-
-  const handleManualOffboard = useCallback(() => {
-    if (!selectedUser || manualAccess.size === 0) return;
-    setConfirmModal({
-      isOpen: true,
-      type: "offboard",
-      isAutomate: false,
-      permissions: Array.from(manualAccess),
-      userName: selectedUser.name
-    });
-  }, [selectedUser, manualAccess]);
-
-  const handleAutomateOffboard = useCallback(() => {
-    if (!selectedUser || automateAccess.size === 0) return;
-    setConfirmModal({
-      isOpen: true,
-      type: "offboard",
-      isAutomate: true,
-      permissions: Array.from(automateAccess),
-      userName: selectedUser.name
-    });
-  }, [selectedUser, automateAccess]);
+    fetchUserAccesses(selectedUser.id);
+    fetchUserLogs(selectedUser.id);
+    if (selectedUser) fetchDiscordStatus(selectedUser.id);
+  }, [selectedUser, userAccesses, showToast, fetchUserAccesses, fetchUserLogs, fetchDiscordStatus]);
 
   const onboardAccesses = useCallback(async (accessesToOnboard, isAutomate) => {
     if (!selectedUser) return;
     setIsOnboarding(true);
 
     const promises = accessesToOnboard.map(async (serviceName) => {
-      const service = services.find(s => s.service_name === serviceName);
-      if (!service) {
+      const serviceObj = services.find(s => s.service_name === serviceName);
+      if (!serviceObj) {
         showToast({
           type: "onboard",
           isAutomate,
           success: false,
           title: `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
-          subtitle: "Error: Service definition not found",
+          subtitle: "Error: Service details not found",
           details: []
         });
         return { name: serviceName, success: false };
       }
 
-      const serviceCode = service.service_code;
+      const serviceCode = serviceObj.service_code;
       let endpoint = "";
       let method = "POST";
+      let bodyData = null;
 
       if (serviceCode === "GOOGLE_PLAY_CONSOLE") {
-        endpoint = `${API_URL}/google-play/users/${selectedUser.user_id}`;
-      } else if (serviceCode === "GOOGLE_DRIVE") {
-        endpoint = `${API_URL}/google-drive/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/google-play/users/${selectedUser.id}`;
       } else if (serviceCode === "BIG_QUERY") {
-        endpoint = `${API_URL}/bigquery/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/bigquery/users/${selectedUser.id}`;
+      } else if (serviceCode === "GOOGLE_DRIVE") {
+        endpoint = `${API_URL}/google-drive/users/${selectedUser.id}`;
+      } else if (serviceCode === "GOOGLE_ANALYTICS") {
+        endpoint = `${API_URL}/google-analytics/users/${selectedUser.id}`;
       } else if (serviceCode === "APPLE_STORE_CONNECT") {
-        endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/appleStoreConnect/users/${selectedUser.id}`;
       } else if (serviceCode === "GOOGLE_CLOUD") {
-        endpoint = `${API_URL}/google-cloud/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/google-cloud/users/${selectedUser.id}`;
       } else if (serviceCode === "FIREBASE") {
-        endpoint = `${API_URL}/firebase/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/firebase/users/${selectedUser.id}`;
       } else if (serviceCode === "KANBOARD") {
-        endpoint = `${API_URL}/kanboard/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/kanboard/users/${selectedUser.id}`;
       } else if (serviceCode === "DISCORD") {
-        endpoint = `${API_URL}/discord/users/${selectedUser.user_id}`;
+        endpoint = `${API_URL}/discord/users/${selectedUser.id}`;
       } else {
-        showToast({
-          type: "onboard",
-          isAutomate,
-          success: false,
-          title: `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
-          subtitle: "Error: No endpoint created",
-          details: []
-        });
-        return { name: serviceName, success: false };
+        endpoint = `${API_URL}/users/${selectedUser.id}/access`;
+        bodyData = JSON.stringify({ service_id: serviceObj.service_id });
       }
 
       try {
-        const response = await fetch(endpoint, {
-          method: method,
-          headers: {
-            "Content-Type": "application/json"
-          }
-        });
+        const fetchOpts = { method };
+        if (bodyData) fetchOpts.body = bodyData;
+        const response = await fetchWithAuth(endpoint, fetchOpts);
         const data = await response.json();
-        const success = response.ok && data.success;
-
+        const isSuccess = response.ok && data.success;
         showToast({
           type: "onboard",
           isAutomate,
-          success,
-          title: success
-            ? `${serviceName} Permission successfully granted to ${selectedUser.name}`
+          success: isSuccess,
+          title: isSuccess
+            ? `Successfully Granted "${serviceName}" Permission to ${selectedUser.name}`
             : `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
-          subtitle: success
-            ? `${isAutomate ? "Automated" : "Manual"} onboarding complete`
-            : `Error: ${data.message || "Failed to onboard"}`,
-          details: []
+          subtitle: isSuccess ? (data.message || "") : (data.message || data.error || "Unknown error"),
+          details: data.data || []
         });
-
-        return { name: serviceName, success };
+        return { name: serviceName, success: isSuccess };
       } catch (err) {
         showToast({
           type: "onboard",
           isAutomate,
           success: false,
           title: `Failed to grant "${serviceName}" Permission to ${selectedUser.name}`,
-          subtitle: `Error: ${err.message || "Network error"}`,
+          subtitle: `Error: ${err.message}`,
           details: []
         });
         return { name: serviceName, success: false };
       }
     });
 
-    const results = await Promise.all(promises);
-    const successful = results.filter(r => r.success);
-
-    if (successful.length > 0) {
-      const successfulNames = successful.map(r => r.name);
-
-      if (isAutomate) {
-        setOnboardAutomateAccess(prev => {
-          const newOnboardAutomate = new Set(prev);
-          successfulNames.forEach(name => newOnboardAutomate.delete(name));
-          return newOnboardAutomate;
-        });
-      } else {
-        setOnboardManualAccess(prev => {
-          const newOnboardManual = new Set(prev);
-          successfulNames.forEach(name => newOnboardManual.delete(name));
-          return newOnboardManual;
-        });
-      }
-
-      await fetchUserAccesses(selectedUser.user_id);
-      await fetchUserLogs(selectedUser.user_id);
-    }
-
+    await Promise.all(promises);
     setIsOnboarding(false);
-  }, [selectedUser, services, fetchUserAccesses, fetchUserLogs, showToast]);
+    setOnboardManualAccess(new Set());
+    setOnboardAutomateAccess(new Set());
+    fetchUserAccesses(selectedUser.id);
+    fetchUserLogs(selectedUser.id);
+    if (selectedUser) fetchDiscordStatus(selectedUser.id);
+  }, [selectedUser, services, showToast, fetchUserAccesses, fetchUserLogs, fetchDiscordStatus]);
+
+  const handleUserSelect = useCallback((user) => {
+    setSelectedUser(user);
+    setManualAccess(new Set());
+    setAutomateAccess(new Set());
+    setOnboardManualAccess(new Set());
+    setOnboardAutomateAccess(new Set());
+    setIsAccessLoading(true);
+    fetchUserAccesses(user.id).finally(() => setIsAccessLoading(false));
+    fetchDiscordStatus(user.id);
+    fetchUserLogs(user.id);
+  }, [fetchUserAccesses, fetchDiscordStatus, fetchUserLogs]);
+
+  const handleManualOffboard = useCallback(() => {
+    const permissions = Array.from(manualAccess);
+    if (permissions.length === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      type: "offboard",
+      isAutomate: false,
+      permissions,
+      userName: selectedUser?.name || ""
+    });
+  }, [manualAccess, selectedUser]);
+
+  const handleAutomateOffboard = useCallback(() => {
+    const permissions = Array.from(automateAccess);
+    if (permissions.length === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      type: "offboard",
+      isAutomate: true,
+      permissions,
+      userName: selectedUser?.name || ""
+    });
+  }, [automateAccess, selectedUser]);
 
   const handleOnboardManual = useCallback(() => {
-    if (!selectedUser || onboardManualAccess.size === 0) return;
+    const permissions = Array.from(onboardManualAccess);
+    if (permissions.length === 0) return;
     setConfirmModal({
       isOpen: true,
       type: "onboard",
       isAutomate: false,
-      permissions: Array.from(onboardManualAccess),
-      userName: selectedUser.name
+      permissions,
+      userName: selectedUser?.name || ""
     });
-  }, [selectedUser, onboardManualAccess]);
+  }, [onboardManualAccess, selectedUser]);
 
   const handleOnboardAutomate = useCallback(() => {
-    if (!selectedUser || onboardAutomateAccess.size === 0) return;
+    const permissions = Array.from(onboardAutomateAccess);
+    if (permissions.length === 0) return;
     setConfirmModal({
       isOpen: true,
       type: "onboard",
       isAutomate: true,
-      permissions: Array.from(onboardAutomateAccess),
-      userName: selectedUser.name
+      permissions,
+      userName: selectedUser?.name || ""
     });
-  }, [selectedUser, onboardAutomateAccess]);
+  }, [onboardAutomateAccess, selectedUser]);
 
-  const handleUserSelect = useCallback(async (user) => {
-    setSelectedUser(user);
-    setOnboardManualAccess(new Set());
-    setOnboardAutomateAccess(new Set());
-    setManualAccess(new Set());
-    setAutomateAccess(new Set());
-    setUserLogs([]);
-    setLogsSummary(null);
-    setDiscordStatus(null);
-
-    if (!user.is_active) {
-      setUserAccesses([]);
-      await fetchUserLogs(user.user_id);
-      return;
-    }
-
-    setIsAccessLoading(true);
-    await Promise.all([
-      fetchUserAccesses(user.user_id),
-      fetchUserLogs(user.user_id),
-      fetchDiscordStatus(user.user_id)
-    ]);
-    setIsAccessLoading(false);
-  }, [fetchUserAccesses, fetchUserLogs, fetchDiscordStatus]);
-
-  // Filter users based on search query
   const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users;
     const query = searchQuery.toLowerCase();
-    return users.filter(user => {
-      const matchesName = user.name?.toLowerCase().includes(query) || false;
-      const matchesEmail = user.email?.toLowerCase().includes(query) || false;
-      return matchesName || matchesEmail;
-    });
+    return users.filter(u =>
+      u.name.toLowerCase().includes(query) ||
+      u.email.toLowerCase().includes(query)
+    );
   }, [users, searchQuery]);
 
   const activeCount = useMemo(() => users.filter(u => u.is_active).length, [users]);
   const inactiveCount = useMemo(() => users.filter(u => !u.is_active).length, [users]);
 
-  // Get all services that the user does NOT have active access to
   const inactiveServices = useMemo(() => {
     return services.filter(service => {
       return !userAccesses.some(a => a.service?.service_id?.toString() === service.service_id?.toString());
@@ -529,72 +458,124 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+          <p className="text-sm font-medium text-slate-600">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
-    <div className="size-full bg-gray-50 p-8 min-h-screen">
+    <div className="size-full bg-slate-50 p-8 min-h-screen">
       <div className="mx-auto max-w-7xl">
         <Header activeCount={activeCount} inactiveCount={inactiveCount} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-          {/* Onboard Access (Left Column) */}
-          <div className="lg:col-span-1">
-            <OnboardAccessCard
-              selectedUser={selectedUser}
-              isAccessLoading={isAccessLoading}
-              onboardManualServices={onboardManualServices}
-              onboardAutomateServices={onboardAutomateServices}
-              onboardManualAccess={onboardManualAccess}
-              onboardAutomateAccess={onboardAutomateAccess}
-              onManualToggle={handleOnboardManualToggle}
-              onAutomateToggle={handleOnboardAutomateToggle}
-              onOnboardManualClick={handleOnboardManual}
-              onOnboardAutomateClick={handleOnboardAutomate}
-              isOnboarding={isOnboarding}
-            />
+        {/* Navigation Tabs for Managers & Admins */}
+        {canManageRoles && (
+          <div className="inline-flex p-1.5 bg-slate-200/60 rounded-2xl mb-6 backdrop-blur border border-slate-200/80 shadow-inner">
+            <button
+              onClick={() => {
+                setActiveTab("access");
+                fetchUsers();
+                if (selectedUser?.id) {
+                  fetchUserAccesses(selectedUser.id);
+                  fetchDiscordStatus(selectedUser.id);
+                  fetchUserLogs(selectedUser.id);
+                }
+              }}
+              className={`px-4 py-2 font-semibold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${activeTab === "access"
+                  ? "bg-white text-blue-600 shadow-sm shadow-slate-200 font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              <Users className="w-4 h-4" />
+              Software Access Management
+            </button>
+            <button
+              onClick={() => setActiveTab("roles")}
+              className={`px-4 py-2 font-semibold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${activeTab === "roles"
+                  ? "bg-white text-blue-600 shadow-sm shadow-slate-200 font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Cerberus Console Roles & Access
+            </button>
           </div>
-
-          {/* Selected User Info & All Users List (Middle Column) */}
-          <div className="lg:col-span-1 flex flex-col gap-6">
-            <UserInfoCard selectedUser={selectedUser} />
-            <UserList
-              users={users}
-              filteredUsers={filteredUsers}
-              selectedUser={selectedUser}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onUserSelect={handleUserSelect}
-              isLoading={isLoading}
-            />
-          </div>
-
-          {/* Offboard Access (Right Column) */}
-          <div className="lg:col-span-1">
-            <OffboardAccessCard
-              selectedUser={selectedUser}
-              isAccessLoading={isAccessLoading}
-              userAccesses={userAccesses}
-              manualAccess={manualAccess}
-              automateAccess={automateAccess}
-              onManualToggle={handleManualAccessToggle}
-              onAutomateToggle={handleAutomateAccessToggle}
-              onOffboardManualClick={handleManualOffboard}
-              onOffboardAutomateClick={handleAutomateOffboard}
-              isOffboarding={isOffboarding}
-              discordStatus={discordStatus}
-            />
-          </div>
-        </div>
-
-        {/* Activity Logs (Bottom Section) */}
-        {selectedUser && (
-          <ActivityLogsCard
-            selectedUser={selectedUser}
-            logs={userLogs}
-            isLoading={isLogsLoading}
-            summary={logsSummary}
-          />
         )}
 
-        {/* Confirmation Modal */}
+        {/* Content Section */}
+        {activeTab === "roles" && canManageRoles ? (
+          <RoleManagementCard showToast={showToast} />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+              <div className="lg:col-span-1">
+                <OnboardAccessCard
+                  selectedUser={selectedUser}
+                  isAccessLoading={isAccessLoading}
+                  onboardManualServices={onboardManualServices}
+                  onboardAutomateServices={onboardAutomateServices}
+                  onboardManualAccess={onboardManualAccess}
+                  onboardAutomateAccess={onboardAutomateAccess}
+                  onManualToggle={handleOnboardManualToggle}
+                  onAutomateToggle={handleOnboardAutomateToggle}
+                  onOnboardManualClick={handleOnboardManual}
+                  onOnboardAutomateClick={handleOnboardAutomate}
+                  isOnboarding={isOnboarding}
+                />
+              </div>
+
+              <div className="lg:col-span-1 flex flex-col gap-6">
+                <UserInfoCard selectedUser={selectedUser} />
+                <UserList
+                  users={users}
+                  filteredUsers={filteredUsers}
+                  selectedUser={selectedUser}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  onUserSelect={handleUserSelect}
+                  isLoading={isLoading}
+                  onRefreshUsers={fetchUsers}
+                />
+              </div>
+
+              <div className="lg:col-span-1">
+                <OffboardAccessCard
+                  selectedUser={selectedUser}
+                  isAccessLoading={isAccessLoading}
+                  userAccesses={userAccesses}
+                  manualAccess={manualAccess}
+                  automateAccess={automateAccess}
+                  onManualToggle={handleManualAccessToggle}
+                  onAutomateToggle={handleAutomateAccessToggle}
+                  onOffboardManualClick={handleManualOffboard}
+                  onOffboardAutomateClick={handleAutomateOffboard}
+                  isOffboarding={isOffboarding}
+                  discordStatus={discordStatus}
+                />
+              </div>
+            </div>
+
+            {selectedUser && (
+              <ActivityLogsCard
+                selectedUser={selectedUser}
+                logs={userLogs}
+                isLoading={isLogsLoading}
+                summary={logsSummary}
+              />
+            )}
+          </>
+        )}
+
         <ConfirmModal
           isOpen={confirmModal.isOpen}
           type={confirmModal.type}
@@ -605,12 +586,23 @@ export default function App() {
           onConfirm={handleConfirmModal}
         />
 
-        {/* Toast Notifications */}
         <ToastContainer
           toasts={toasts}
           onCloseToast={handleCloseToast}
         />
+
+        {requiresPasswordChange && <ResetPasswordModal />}
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <AuthProvider>
+        <MainDashboard />
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
