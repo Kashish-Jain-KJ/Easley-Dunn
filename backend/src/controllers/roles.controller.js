@@ -88,7 +88,12 @@ async function grantRole(req, res) {
       throw ApiError.badRequest("An initial password is required to grant console role access (Operator, Manager, Admin) to a user who does not have a password yet.");
     }
 
-    if (passwordHash) {
+    if (targetRole === "MEMBER") {
+      await pool.query(
+        `UPDATE easleydunn.users SET "Role" = 'MEMBER', password_hash = NULL, requires_password_change = false WHERE user_id = $1`,
+        [userId]
+      );
+    } else if (passwordHash) {
       await pool.query(
         `UPDATE easleydunn.users SET "Role" = $1, password_hash = $2, requires_password_change = true WHERE user_id = $3`,
         [targetRole, passwordHash, userId]

@@ -209,7 +209,11 @@ async function getCurrentUser(req, res) {
  * Clears session cookie.
  */
 async function logout(req, res) {
-  res.clearCookie("session");
+  res.clearCookie("session", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
   res.json({ success: true, message: "Logged out successfully." });
 }
 

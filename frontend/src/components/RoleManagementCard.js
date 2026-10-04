@@ -893,7 +893,10 @@ export default function RoleManagementCard({ showToast }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={editModal.isSubmitting}
+                  disabled={
+                    editModal.isSubmitting ||
+                    (editModal.role !== "MEMBER" && !editModal.user?.hasPassword && !editModal.password)
+                  }
                   className="px-5 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
                 >
                   {editModal.isSubmitting && <RefreshCw className="w-4 h-4 animate-spin" />}

@@ -93,6 +93,12 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.error("Storage clear error:", e);
+      }
       setUser(null);
     }
   };
