@@ -18,6 +18,18 @@ const { onboardDiscordUser, removeDiscordUser, confirmDiscordUsername, renderCon
 
 const router = Router();
 
+// Employee-facing routes that must NEVER require a Cerberus session — the
+// person submitting these has no login at all, just the link from their
+// invite email. Exported separately (discordPublicRoutes) so index.routes.js
+// can mount this one WITHOUT rbacOperator, ahead of the gated router below.
+const publicRouter = Router();
+
+// Intentionally undocumented in Swagger and intentionally ungated — not meant
+// to be called directly by API clients, and never callable by someone who's
+// actually logged in, since the person using them isn't a Cerberus admin at all.
+publicRouter.post("/users/:userId/confirm", asyncHandler(confirmDiscordUsername));
+publicRouter.get("/users/:userId/confirm-page", asyncHandler(renderConfirmPage));
+
 /**
  * @swagger
  * /discord/users/{userId}:
@@ -64,12 +76,6 @@ router.post("/users/:userId", asyncHandler(onboardDiscordUser));
  */
 router.delete("/users/:userId", asyncHandler(removeDiscordUser));
 
-// Intentionally undocumented in Swagger — internal-use links only (sent via
-// the invite email), not meant to be called directly by API clients.
-// Routes still fully functional, just not listed at /docs.
-router.post("/users/:userId/confirm", asyncHandler(confirmDiscordUsername));
-router.get("/users/:userId/confirm-page", asyncHandler(renderConfirmPage));
-
 /**
  * @swagger
  * /discord/users/{userId}/status:
@@ -104,4 +110,4 @@ router.get("/users/:userId/confirm-page", asyncHandler(renderConfirmPage));
  */
 router.get("/users/:userId/status", asyncHandler(getDiscordStatus));
 
-module.exports = router;
+module.exports = { discordRoutes: router, discordPublicRoutes: publicRouter };
