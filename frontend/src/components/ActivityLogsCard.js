@@ -77,6 +77,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
         const commandType = (log.command_type || "").toLowerCase();
         const status = (log.status || "").toLowerCase();
         const errorMsg = (log.error_message || "").toLowerCase();
+        const performedBy = (log.performed_by || "").toLowerCase();
         const logId = String(log.id);
 
         const matches =
@@ -85,6 +86,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
           commandType.includes(q) ||
           status.includes(q) ||
           errorMsg.includes(q) ||
+          performedBy.includes(q) ||
           logId.includes(q);
 
         if (!matches) return false;
@@ -210,6 +212,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
                   <th className="py-3 px-6">Service</th>
                   <th className="py-3 px-6">Type</th>
                   <th className="py-3 px-6">Status</th>
+                  <th className="py-3 px-6">Performed By</th>
                   <th className="py-3 px-6 max-w-xs">Error</th>
                   <th className="py-3 px-6 text-right">Timestamp</th>
                 </tr>
@@ -221,6 +224,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
                     <td className="py-4 px-6"><div className="h-4 w-32 bg-gray-200/80 rounded-md" /></td>
                     <td className="py-4 px-6"><div className="h-6 w-24 bg-gray-200/80 rounded-full" /></td>
                     <td className="py-4 px-6"><div className="h-6 w-24 bg-gray-200/80 rounded-full" /></td>
+                    <td className="py-4 px-6"><div className="h-4 w-28 bg-gray-200/80 rounded-md" /></td>
                     <td className="py-4 px-6"><div className="h-4 w-44 bg-gray-200/80 rounded-md" /></td>
                     <td className="py-4 px-6 text-right"><div className="h-4 w-28 bg-gray-200/80 rounded-md ml-auto" /></td>
                   </tr>
@@ -246,6 +250,7 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
                   <th className="py-3 px-6">Service</th>
                   <th className="py-3 px-6">Type</th>
                   <th className="py-3 px-6">Status</th>
+                  <th className="py-3 px-6">Performed By</th>
                   <th className="py-3 px-6 max-w-xs">Error</th>
                   <th className="py-3 px-6 text-right">Timestamp</th>
                 </tr>
@@ -304,6 +309,11 @@ function ActivityLogsCard({ selectedUser, logs = [], isLoading = false, summary 
                             FAILED
                           </span>
                         )}
+                      </td>
+
+                      {/* Performed By */}
+                      <td className="py-3.5 px-6 font-medium text-gray-800 whitespace-nowrap">
+                        {log.performed_by || "System"}
                       </td>
 
                       {/* Error Message */}

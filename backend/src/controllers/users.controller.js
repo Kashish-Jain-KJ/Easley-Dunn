@@ -162,7 +162,13 @@ async function onboardUserAccess(req, res) {
     [accessId]
   );
 
-  await logActivity({ userId, serviceId: service_id, commandType: "ONBOARD", status: "SUCCESS" });
+  await logActivity({
+    userId,
+    serviceId: service_id,
+    commandType: "ONBOARD",
+    status: "SUCCESS",
+    performedBy: req.user?.name || req.user?.email || "System",
+  });
 
   res.json({
     success: true,
@@ -201,7 +207,13 @@ async function offboardUserAccess(req, res) {
     [accessId]
   );
 
-  await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" });
+  await logActivity({
+    userId,
+    serviceId: service_id,
+    commandType: "OFFBOARD",
+    status: "SUCCESS",
+    performedBy: req.user?.name || req.user?.email || "System",
+  });
 
   res.json({
     success: true,
@@ -215,8 +227,9 @@ async function offboardUserAccess(req, res) {
  */
 async function getUserLogs(req, res) {
   const { userId } = req.params;
+  const pool = getPool();
 
-  const { rows: logRows } = await getPool().query(
+  const { rows: logRows } = await pool.query(
     `SELECT
        l.id,
        l.user_id,
@@ -224,6 +237,7 @@ async function getUserLogs(req, res) {
        l.command_type,
        l.status,
        l.error_message,
+       l.performed_by,
        l.created_at,
        s.service_name,
        s.service_code

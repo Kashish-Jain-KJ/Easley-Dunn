@@ -110,11 +110,15 @@ async function grantRole(req, res) {
     }
 
     const { first_name, last_name } = splitName(name);
+    const isMember = targetRole === "MEMBER";
+    const finalPasswordHash = isMember ? null : passwordHash;
+    const finalRequiresPasswordChange = isMember ? false : true;
+
     const { rows: insertedRows } = await pool.query(
       `INSERT INTO easleydunn.users (first_name, last_name, email, is_active, "Role", password_hash, requires_password_change)
-       VALUES ($1, $2, $3, true, $4, $5, true)
+       VALUES ($1, $2, $3, true, $4, $5, $6)
        RETURNING user_id`,
-      [first_name, last_name, normalizedEmail, targetRole, passwordHash]
+      [first_name, last_name, normalizedEmail, targetRole, finalPasswordHash, finalRequiresPasswordChange]
     );
     userId = insertedRows[0].user_id;
   }
@@ -199,6 +203,11 @@ async function getRoleUsers(req, res) {
   // Ensure all NULL or 'NONE' roles in the database are migrated to 'MEMBER'
   await pool.query(
     `UPDATE easleydunn.users SET "Role" = 'MEMBER' WHERE "Role" IS NULL OR "Role" = 'NONE'`
+  );
+
+  // Clean up any lingering password data or flags for MEMBER accounts
+  await pool.query(
+    `UPDATE easleydunn.users SET password_hash = NULL, requires_password_change = false WHERE "Role" = 'MEMBER'`
   );
 
   const { rows } = await pool.query(
