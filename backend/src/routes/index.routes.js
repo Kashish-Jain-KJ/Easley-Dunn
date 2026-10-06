@@ -21,8 +21,7 @@ const appleStoreConnectRoutes = require("./appleStoreConnect.routes");
 const googleCloudRoutes = require("./googleCloud.routes");
 const firebaseRoutes = require("./firebase.routes");
 const kanboardRoutes = require("./kanboard.routes");
-const discordRoutes = require("./discord.routes");
-const adminRoutes = require("./admin.routes");
+const { discordRoutes, discordPublicRoutes } = require("./discord.routes");
 
 const requireAuth = require("../middlewares/requireAuth.middleware");
 const requireRole = require("../middlewares/requireRole.middleware");
@@ -32,6 +31,9 @@ const router = Router();
 // Public routes
 router.use("/health", healthRoutes);
 router.use("/auth", authRoutes);
+// Employee-facing Discord routes — no Cerberus session, ever. Must be mounted
+// here, ahead of the gated /discord block below, so these match first.
+router.use("/discord", discordPublicRoutes);
 
 // Protected RBAC routes (Requires minimum OPERATOR role)
 const rbacOperator = [requireAuth, requireRole("OPERATOR")];
@@ -50,6 +52,5 @@ router.use("/discord", rbacOperator, discordRoutes);
 
 // Role delegation routes (Requires minimum MANAGER role)
 router.use("/admin/roles", rolesRoutes);
-router.use("/admin", adminRoutes);
 
 module.exports = router;
