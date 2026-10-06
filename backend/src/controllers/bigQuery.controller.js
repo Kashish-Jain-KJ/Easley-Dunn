@@ -74,6 +74,7 @@ async function removeBigQueryUser(req, res) {
         commandType: "OFFBOARD",
         status: "FAILED",
         errorMessage: `BigQuery access record not found for user_id '${userId}'. (Code: 404)`,
+        performedBy: req.user?.name || req.user?.email || "System",
       });
 
       return res.status(404).json({
@@ -92,6 +93,7 @@ async function removeBigQueryUser(req, res) {
         commandType: "OFFBOARD",
         status: "FAILED",
         errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)",
+        performedBy: req.user?.name || req.user?.email || "System",
       });
 
       return res.status(400).json({
@@ -140,6 +142,7 @@ async function removeBigQueryUser(req, res) {
         commandType: "OFFBOARD",
         status: "FAILED",
         errorMessage: `User/Role combination not found in IAM policy for project ${external_account_identifier}. (Code: 404)`,
+        performedBy: req.user?.name || req.user?.email || "System",
       });
 
       return res.status(404).json({
@@ -165,10 +168,10 @@ async function removeBigQueryUser(req, res) {
     );
 
     // Insert success log
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
     console.log(`[BigQuery/IAM] Successfully removed ${external_user_identifier} from ${external_account_identifier}.`);
-    
+
     res.json({
       success: true,
       message: `Successfully removed ${external_user_identifier} from BigQuery project ${external_account_identifier}.`,
@@ -191,7 +194,7 @@ async function removeBigQueryUser(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     // Insert failure log
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.status(500).json({
       success: false,
@@ -260,7 +263,8 @@ async function onboardBigQueryUser(req, res) {
           commandType: "ONBOARD",
           status: "FAILED",
           errorMessage: `User not found with user_id '${userId}'.`,
-        });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
         return res.status(404).json({
           success: false,
           message: `User not found with user_id '${userId}'.`,
@@ -277,7 +281,8 @@ async function onboardBigQueryUser(req, res) {
           commandType: "ONBOARD",
           status: "FAILED",
           errorMessage: "Credentials file or project_id not found inside bigquery_json folder.",
-        });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
         return res.status(500).json({
           success: false,
           message: "No credentials file or project_id found inside bigquery_json folder.",
@@ -311,7 +316,8 @@ async function onboardBigQueryUser(req, res) {
           commandType: "ONBOARD",
           status: "FAILED",
           errorMessage: errMessage,
-        });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
         results.push({ access_id, status: "failed", error: "Missing Project ID or Email" });
         continue;
       }
@@ -327,7 +333,7 @@ async function onboardBigQueryUser(req, res) {
 
         const memberToAdd = `user:${external_user_identifier}`;
         const targetRole = "roles/viewer";
-        
+
         if (!policy.bindings) {
           policy.bindings = [];
         }
@@ -363,7 +369,7 @@ async function onboardBigQueryUser(req, res) {
         );
 
         // Insert success log
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
         console.log(`[BigQuery/IAM] Successfully added ${external_user_identifier} to ${external_account_identifier} with role ${targetRole}.`);
         results.push({ access_id, project: external_account_identifier, role: targetRole, status: "onboarded" });
@@ -373,7 +379,7 @@ async function onboardBigQueryUser(req, res) {
         const errMessage = `${error.message} (Code: ${errCode})`;
 
         // Insert failure log
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
         results.push({ access_id, project: external_account_identifier, status: "failed", error: errMessage });
       }
@@ -413,7 +419,7 @@ async function onboardBigQueryUser(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     // Insert overall failure log if applicable
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.status(500).json({
       success: false,

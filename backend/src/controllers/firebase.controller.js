@@ -67,7 +67,9 @@ async function onboardFirebaseUser(req, res) {
       );
 
       if (userRows.length === 0) {
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: `User not found with user_id '${userId}'.` });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: `User not found with user_id '${userId}'.`,
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
         return res.status(404).json({
           success: false,
           message: `User not found with user_id '${userId}'.`,
@@ -78,7 +80,7 @@ async function onboardFirebaseUser(req, res) {
       const projectId = getFirebaseProjectId();
 
       if (!projectId) {
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: "Credentials file or project_id not found inside firebase_json folder." });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: "Credentials file or project_id not found inside firebase_json folder." , performedBy: req.user?.name || req.user?.email || "System" });
         return res.status(500).json({
           success: false,
           message: "No credentials file or project_id found inside firebase_json folder.",
@@ -104,7 +106,7 @@ async function onboardFirebaseUser(req, res) {
 
       if (!projectId || !external_user_identifier) {
         const errMessage = "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)";
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
         results.push({ access_id, status: "failed", error: "Missing Firebase Project ID or Email" });
         continue;
       }
@@ -144,7 +146,7 @@ async function onboardFirebaseUser(req, res) {
           [firebaseUid, access_id]
         );
 
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
         console.log(`[Firebase/Auth] Successfully onboarded ${external_user_identifier} to ${projectId}. UID: ${firebaseUid}`);
         results.push({ access_id, project: projectId, firebaseUid, created, status: "onboarded" });
@@ -153,7 +155,7 @@ async function onboardFirebaseUser(req, res) {
         const errCode = error.code || error.status || "500";
         const errMessage = `${error.message} (Code: ${errCode})`;
 
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
         results.push({ access_id, project: projectId, status: "failed", error: errMessage });
       }
@@ -191,7 +193,7 @@ async function onboardFirebaseUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.status(500).json({
       success: false,
@@ -225,7 +227,9 @@ async function removeFirebaseUser(req, res) {
         console.error(dbErr);
       }
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `Firebase access record not found for user_id '${userId}'. (Code: 404)` });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `Firebase access record not found for user_id '${userId}'. (Code: 404)`,
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
 
       return res.status(404).json({
         success: false,
@@ -237,7 +241,7 @@ async function removeFirebaseUser(req, res) {
     serviceIdVal = service_id;
 
     if (!projectId || !external_user_identifier) {
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)" , performedBy: req.user?.name || req.user?.email || "System" });
 
       return res.status(400).json({
         success: false,
@@ -263,7 +267,7 @@ async function removeFirebaseUser(req, res) {
       [userId, serviceIdVal]
     );
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
     console.log(`[Firebase/Auth] Successfully removed ${external_user_identifier} from ${projectId}.`);
 
@@ -289,7 +293,7 @@ async function removeFirebaseUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.status(500).json({
       success: false,

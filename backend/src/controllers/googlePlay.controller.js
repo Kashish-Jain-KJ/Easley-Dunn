@@ -46,7 +46,8 @@ async function removeGooglePlayUser(req, res) {
       commandType: "OFFBOARD",
       status: "FAILED",
       errorMessage: `Google Play access record not found for user_id '${userId}'. (Code: 404)`,
-    });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
 
     return res.status(404).json({
       success: false,
@@ -63,7 +64,8 @@ async function removeGooglePlayUser(req, res) {
       commandType: "OFFBOARD",
       status: "FAILED",
       errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)",
-    });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
 
     return res.status(400).json({
       success: false,
@@ -87,7 +89,7 @@ async function removeGooglePlayUser(req, res) {
     );
 
     // Insert success log
-    await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" });
+    await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.json({
       success: true,
@@ -100,7 +102,7 @@ async function removeGooglePlayUser(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     // Insert failure log
-    await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.status(500).json({
       success: false,
@@ -229,7 +231,7 @@ async function onboardGooglePlayUser(req, res) {
       }
 
       // 5. Insert success log
-      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
     }
 
     res.status(201).json({
@@ -243,7 +245,7 @@ async function onboardGooglePlayUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     res.status(500).json({
       success: false,

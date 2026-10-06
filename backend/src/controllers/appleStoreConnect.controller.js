@@ -131,7 +131,7 @@ async function onboardAppleStoreConnectUser(req, res) {
     const privateKey = getApplePrivateKey();
     if (!privateKey) {
       const errMessage = "No .p8 credentials file found inside the apple_key folder.";
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       return res.status(500).json({
         success: false,
         message: errMessage,
@@ -166,7 +166,7 @@ async function onboardAppleStoreConnectUser(req, res) {
     } catch (jwtErr) {
       console.error("JWT signing failed:", jwtErr);
       const errMessage = `JWT creation failed: ${jwtErr.message}`;
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       return res.status(500).json({
         success: false,
         message: errMessage,
@@ -203,7 +203,7 @@ async function onboardAppleStoreConnectUser(req, res) {
       
       const errMessage = `${errDetail} (Code: ${response.status})`;
 
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
       return res.status(response.status || 500).json({
         success: false,
@@ -224,7 +224,7 @@ async function onboardAppleStoreConnectUser(req, res) {
       );
     }
 
-      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
     return res.status(201).json({
       success: true,
@@ -237,7 +237,7 @@ async function onboardAppleStoreConnectUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     return res.status(500).json({
       success: false,
@@ -292,7 +292,7 @@ async function offboardAppleStoreConnectUser(req, res) {
 
     if (accessRows.length === 0) {
       const errMessage = `Apple Store Connect access record not found or already inactive for user_id '${userIdInt}'.`;
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       return res.status(404).json({
         success: false,
         message: errMessage,
@@ -305,7 +305,7 @@ async function offboardAppleStoreConnectUser(req, res) {
     const privateKey = getApplePrivateKey();
     if (!privateKey) {
       const errMessage = "No .p8 credentials file found inside the apple_key folder.";
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       return res.status(500).json({
         success: false,
         message: errMessage,
@@ -354,7 +354,7 @@ async function offboardAppleStoreConnectUser(req, res) {
 
     if (!appleUserId) {
       const errMessage = `User ${userEmail} not found in Apple Store Connect active members or pending invitations.`;
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       return res.status(404).json({
         success: false,
         message: errMessage,
@@ -379,7 +379,7 @@ async function offboardAppleStoreConnectUser(req, res) {
 
       const errMessage = `${errDetail} (Code: ${deleteResponse.status})`;
 
-        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+        await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
       return res.status(deleteResponse.status || 500).json({
         success: false,
@@ -397,7 +397,7 @@ async function offboardAppleStoreConnectUser(req, res) {
       [access_id]
     );
 
-      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
     return res.json({
       success: true,
@@ -409,7 +409,7 @@ async function offboardAppleStoreConnectUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId: userIdInt, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
 
     return res.status(500).json({
       success: false,

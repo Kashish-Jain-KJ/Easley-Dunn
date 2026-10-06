@@ -176,7 +176,8 @@ async function offboardGoogleDriveUser(req, res) {
       commandType: "OFFBOARD",
       status: "FAILED",
       errorMessage: `No active Google Drive access records found for user_id '${userId}'. (Code: 404)`,
-    });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
 
     return res.status(404).json({
       success: false,
@@ -198,7 +199,8 @@ async function offboardGoogleDriveUser(req, res) {
       commandType: "OFFBOARD",
       status: "FAILED",
       errorMessage: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`,
-    });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
 
     return res.status(409).json({
       success: false,
@@ -233,7 +235,8 @@ async function offboardGoogleDriveUser(req, res) {
           commandType: "OFFBOARD",
           status: "FAILED",
           errorMessage: `User permission not found on folder '${folderId}' (already removed or deleted).`,
-        });
+        performedBy: req.user?.name || req.user?.email || "System",
+      });
         continue;
       }
 
@@ -250,7 +253,7 @@ async function offboardGoogleDriveUser(req, res) {
       );
 
       // Insert success log
-      await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" });
+      await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
       results.push({ folderId, status: "removed" });
     } catch (error) {
@@ -264,6 +267,7 @@ async function offboardGoogleDriveUser(req, res) {
         commandType: "OFFBOARD",
         status: "FAILED",
         errorMessage: `Folder '${folderId}' deprovisioning failed: ${errMessage}`,
+        performedBy: req.user?.name || req.user?.email || "System",
       });
 
       results.push({ folderId, status: "failed", error: error.message });

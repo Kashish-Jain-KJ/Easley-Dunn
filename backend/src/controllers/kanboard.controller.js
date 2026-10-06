@@ -286,7 +286,7 @@ async function onboardKanboardUser(req, res) {
 
   if (!localUser) {
     const errMessage = `User not found with user_id '${userId}'.`;
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
     return res.status(404).json({ success: false, message: errMessage });
   }
 
@@ -294,7 +294,7 @@ async function onboardKanboardUser(req, res) {
 
   if (accessRows.length === 0) {
     const errMessage = `No inactive Kanboard access records found for user_id '${userId}'.`;
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
     return res.status(404).json({ success: false, message: errMessage });
   }
 
@@ -305,7 +305,7 @@ async function onboardKanboardUser(req, res) {
 
     if (!projectId) {
       const errMessage = "Missing Kanboard project ID";
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       results.push({ access_id, status: "failed", error: errMessage });
       continue;
     }
@@ -340,12 +340,12 @@ async function onboardKanboardUser(req, res) {
         [String(kanboardUserId), access_id]
       );
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
       results.push({ access_id, projectId, kanboardUserId, role, createdUser, emailSent, status: "onboarded" });
     } catch (error) {
       const errMessage = error.message;
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       results.push({ access_id, projectId, status: "failed", error: errMessage });
     }
   }
@@ -379,7 +379,7 @@ async function offboardKanboardUser(req, res) {
 
   if (accessRows.length === 0) {
     const errMessage = `Kanboard access record not found for user_id '${userId}'.`;
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
     return res.status(404).json({ success: false, message: errMessage });
   }
 
@@ -390,7 +390,7 @@ async function offboardKanboardUser(req, res) {
 
     if (!projectId || !external_user_identifier) {
       const errMessage = "Missing Kanboard project ID or user identifier";
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       results.push({ access_id, status: "failed", error: errMessage });
       continue;
     }
@@ -411,12 +411,12 @@ async function offboardKanboardUser(req, res) {
         [access_id]
       );
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
 
       results.push({ access_id, projectId, kanboardUserId, status: "removed" });
     } catch (error) {
       const errMessage = error.message;
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
       results.push({ access_id, projectId, status: "failed", error: errMessage });
     }
   }
