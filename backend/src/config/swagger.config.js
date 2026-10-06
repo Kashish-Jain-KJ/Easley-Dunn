@@ -8,6 +8,7 @@
 
 "use strict";
 
+const path = require("path");
 const swaggerJsdoc = require("swagger-jsdoc");
 const appConfig = require("./app.config");
 
@@ -17,7 +18,7 @@ const options = {
     info: {
       title: "Easleydunn API",
       version: "1.0.0",
-      description: "REST API documentation for the Easleydunn backend.",
+      description: "REST API documentation for the Easleydunn Cerberus backend.",
     },
     servers: [
       {
@@ -25,12 +26,22 @@ const options = {
         description: "API Server",
       },
     ],
+    components: {
+      securitySchemes: {
+        cookieAuth: {
+          type: "apiKey",
+          in: "cookie",
+          name: "session",
+          description: "Session JWT cookie",
+        },
+      },
+    },
   },
   // Scan all route files for @swagger JSDoc blocks
-  // apis: ["./src/routes/*.routes.js"]
-  apis: ["./src/routes/*.routes.js"],
+  apis: [path.join(__dirname, "../routes/*.routes.js")],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
 
 module.exports = swaggerSpec;
+

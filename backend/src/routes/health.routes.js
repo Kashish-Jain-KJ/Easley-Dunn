@@ -14,7 +14,26 @@ const { getPool } = require("../db/database");
 
 const router = Router();
 
-// Liveness probe — no DB required
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Server liveness probe
+ *     description: Quick health check verifying the server is running without hitting the database. Used by load-balancers and Docker health checks.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Server is online and responding.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Server is running" }
+ *                 timestamp: { type: string, example: "2026-10-07T01:00:00.000Z" }
+ *                 environment: { type: string, example: "development" }
+ */
 router.get(
   "/",
   asyncHandler(async (_req, res) => {
@@ -27,7 +46,25 @@ router.get(
   })
 );
 
-// Readiness probe — confirms DB pool is working
+/**
+ * @swagger
+ * /health/db:
+ *   get:
+ *     summary: Database connectivity readiness probe
+ *     description: Verifies active database connection pool health with a lightweight SELECT query.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Database connectivity probe completed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 database: { type: string, example: "connected" }
+ *                 timestamp: { type: string, example: "2026-10-07T01:00:00.000Z" }
+ */
 router.get(
   "/db",
   asyncHandler(async (_req, res) => {
@@ -41,3 +78,4 @@ router.get(
 );
 
 module.exports = router;
+
