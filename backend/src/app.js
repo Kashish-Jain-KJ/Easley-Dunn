@@ -13,7 +13,6 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
-const cookieParser = require("cookie-parser");
 
 const appConfig = require("./config/app.config");
 const logger = require("./utils/logger");
@@ -22,8 +21,14 @@ const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger.config");
+const sessionMiddleware = require("./config/session.config");
 
 const app = express();
+
+// Required behind a load balancer or reverse proxy: without it Express sees
+// the proxy's IP (breaking per-IP rate limiting) and refuses to set Secure
+// cookies because it believes the connection is plaintext.
+app.set("trust proxy", 1);
 
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet());
@@ -52,7 +57,6 @@ app.use(
 // ─── Request parsing ──────────────────────────────────────────────────────────
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
 
 // ─── HTTP request logging ─────────────────────────────────────────────────────
 const morganStream = { write: (msg) => logger.http(msg.trim()) };
@@ -61,6 +65,10 @@ app.use(
     stream: morganStream,
   })
 );
+
+// ─── Session ──────────────────────────────────────────────────────────────────
+// Must come before any router so req.session exists for requireAuth.
+app.use(sessionMiddleware);
 
 // ─── Root redirect → Swagger UI ──────────────────────────────────────────────
 app.get("/", (_req, res) => res.redirect("/docs"));

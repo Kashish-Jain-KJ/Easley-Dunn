@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { ShieldCheck, Mail, Lock, Eye, EyeOff, AlertCircle, RefreshCw } from "lucide-react";
 
 export default function LoginPage() {
-  const { login, error, setError } = useAuth();
+  const { login, error, setError, sessionExpired } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +41,22 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow-xl shadow-slate-200/50 sm:rounded-xl sm:px-10 border border-slate-100">
+          {sessionExpired && !error && (
+            <div className="mb-6 rounded-lg bg-amber-50 p-4 border border-amber-200">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-amber-800">Your session expired</h3>
+                  <div className="mt-1 text-sm text-amber-700">
+                    You were signed out for security. Please log in again to continue.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mb-6 rounded-lg bg-red-50 p-4 border border-red-200">
               <div className="flex">

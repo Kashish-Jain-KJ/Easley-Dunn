@@ -19,6 +19,16 @@ jest.mock("nodemailer", () => ({
 
 const nodemailer = require("nodemailer");
 
+// Stub the session lookup — these tests exercise route wiring and controller
+// behaviour, not authentication. See tests/helpers/authMock.js.
+jest.mock("../../src/middlewares/requireAuth.middleware", () =>
+  jest.fn((req, _res, next) => {
+    req.user = require("../helpers/authMock").TEST_USER;
+    next();
+  })
+);
+
+
 describe("Discord integration", () => {
   const ENV_KEYS = ["DISCORD_BOT_TOKEN", "DISCORD_INVITE_CHANNEL_ID", "DISCORD_GUILD_ID", "MAIL_FROM", "MAIL_SMTP_USERNAME"];
   let originalEnv = {};

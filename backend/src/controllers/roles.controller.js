@@ -11,8 +11,12 @@ const ApiError = require("../utils/ApiError");
 const { sendRoleNotificationEmail } = require("../services/roleEmail.service");
 const { VALID_ROLES, ROLE_LEVELS } = require("../config/roles.config");
 const { splitName } = require("../utils/userUtils");
+const appConfig = require("../config/app.config");
+const { revokeAllForUser } = require("../services/session.service");
 
-const PEPPER = process.env.PASSWORD_PEPPER || "cerberus-secret-pepper-key";
+const PEPPER = appConfig.passwordPepper;
+const BCRYPT_COST = 12;
+const MIN_PASSWORD_LENGTH = 12;
 
 /**
  * POST /admin/roles/grant
@@ -58,10 +62,10 @@ async function grantRole(req, res) {
 
   let passwordHash = null;
   if (password && typeof password === "string" && password.trim().length > 0) {
-    if (password.length < 6) {
-      throw ApiError.badRequest("Password must be at least 6 characters long.");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      throw ApiError.badRequest(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
     }
-    passwordHash = bcrypt.hashSync(password + PEPPER, 12);
+    passwordHash = await bcrypt.hash(password + PEPPER, BCRYPT_COST);
   }
 
   const { rows: existingRows } = await pool.query(
@@ -93,16 +97,28 @@ async function grantRole(req, res) {
         `UPDATE easleydunn.users SET "Role" = 'MEMBER', password_hash = NULL, requires_password_change = false WHERE user_id = $1`,
         [userId]
       );
+      // Console access withdrawn — end any session already holding it.
+      await revokeAllForUser(userId);
     } else if (passwordHash) {
       await pool.query(
         `UPDATE easleydunn.users SET "Role" = $1, password_hash = $2, requires_password_change = true WHERE user_id = $3`,
         [targetRole, passwordHash, userId]
       );
+      // Credentials were reset by an administrator — sign the user out everywhere.
+      await revokeAllForUser(userId);
     } else {
       await pool.query(
         `UPDATE easleydunn.users SET "Role" = $1 WHERE user_id = $2`,
         [targetRole, userId]
       );
+      // OWASP: a privilege level change must not be inherited by a session
+      // that predates it. The change is made by an admin from a different
+      // session, so the target's session id cannot be regenerated in place —
+      // ending their sessions and forcing a fresh login is the equivalent.
+      // Guarded on an actual change so re-saving the same role is a no-op.
+      if (currentTargetRole !== targetRole) {
+        await revokeAllForUser(userId);
+      }
     }
   } else {
     if (targetRole !== "MEMBER" && !passwordHash) {
@@ -186,6 +202,9 @@ async function revokeRole(req, res) {
     `UPDATE easleydunn.users SET "Role" = 'MEMBER', password_hash = NULL WHERE user_id = $1`,
     [userId]
   );
+
+  // Revocation has to end live sessions, not just future logins.
+  await revokeAllForUser(userId);
 
   res.json({
     success: true,
@@ -297,6 +316,8 @@ async function toggleUserStatus(req, res) {
       `UPDATE easleydunn.users SET is_active = false, "Role" = 'MEMBER' WHERE user_id = $1`,
       [userId]
     );
+    // Deactivation takes effect immediately, including for anyone logged in.
+    await revokeAllForUser(userId);
   } else {
     await pool.query(
       `UPDATE easleydunn.users SET is_active = true WHERE user_id = $1`,

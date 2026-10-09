@@ -11,21 +11,24 @@ const request = require("supertest");
 const app = require("../../src/app");
 const { getPool } = require("../../src/db/database");
 
-const jwt = require("jsonwebtoken");
+// Stub the session lookup — these tests exercise route wiring and controller
+// behaviour, not authentication. See tests/helpers/authMock.js.
+jest.mock("../../src/middlewares/requireAuth.middleware", () =>
+  jest.fn((req, _res, next) => {
+    req.user = require("../helpers/authMock").TEST_USER;
+    next();
+  })
+);
 
-const TEST_SECRET = process.env.AUTH_JWT_SECRET || "test-secret-for-admin-jwt";
 
-function makeSessionCookie({ userId = 1, email = "operator@example.com", role = "OPERATOR" } = {}) {
-  const token = jwt.sign({ userId, email, role }, TEST_SECRET, { expiresIn: "7d" });
-  return `session=${token}`;
-}
+
+
 
 describe("Services Routes Integration Tests", () => {
   describe("GET /services", () => {
     it("should return all services in the database", async () => {
       const res = await request(app)
-        .get("/services")
-        .set("Cookie", makeSessionCookie());
+        .get("/services");
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body).toHaveProperty("count");
