@@ -382,16 +382,160 @@ async function removeDiscordUser(req, res) {
  *
  * Expected body: { username }
  */
+// Shared look for the confirm-page form and its result pages — hand-written
+// CSS, not Tailwind, since this is a standalone server-rendered page with no
+// build step, but matches the dashboard's actual palette: white rounded-3xl
+// cards on a gray-50 page, the same green (#10a353) / red (#d91e36) accents
+// the Onboard/Offboard cards already use.
+const PAGE_STYLES = `
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9fafb;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 440px;
+    background: #ffffff;
+    border: 1px solid rgba(229, 231, 235, 0.8);
+    border-radius: 24px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    padding: 32px;
+  }
+  .accent-bar {
+    height: 6px;
+    border-radius: 999px;
+    margin: -32px -32px 24px -32px;
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+  }
+  .accent-bar.ok { background: #10a353; }
+  .accent-bar.err { background: #d91e36; }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 12px;
+  }
+  p { color: #6b7280; font-size: 0.95rem; line-height: 1.5; margin: 0 0 20px; }
+  .detail { color: #374151; font-weight: 600; }
+  label { display: block; font-weight: 600; color: #374151; margin-bottom: 8px; font-size: 0.9rem; }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 1rem;
+    margin-bottom: 20px;
+  }
+  input[type="text"]:focus { outline: none; border-color: #10a353; }
+  button, .btn {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #ffffff;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  button.ok, .btn.ok { background: #10a353; }
+  button.ok:hover, .btn.ok:hover { background: #0d8c47; }
+  button.err, .btn.err { background: #d91e36; }
+  button.err:hover, .btn.err:hover { background: #c0152b; }
+`;
+
+function confirmFormPage(userId) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Confirm your Discord username — Easley-Dunn</title>
+<style>${PAGE_STYLES}</style>
+</head>
+<body>
+<div class="card">
+  <div class="accent-bar ok"></div>
+  <h1>Confirm your Discord username</h1>
+  <p>Enter the Discord username you used to join the Easley-Dunn Discord server. This links your account so we can manage your access.</p>
+  <form method="POST" action="/discord/users/${userId}/confirm">
+    <label for="username">Discord username</label>
+    <input type="text" id="username" name="username" required autofocus />
+    <button type="submit" class="ok">Submit</button>
+  </form>
+</div>
+</body>
+</html>`;
+}
+
+function confirmSuccessPage({ username, discordUserId }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Discord account linked — Easley-Dunn</title>
+<style>${PAGE_STYLES}</style>
+</head>
+<body>
+<div class="card">
+  <div class="accent-bar ok"></div>
+  <h1>Discord account linked</h1>
+  <p>Linked Discord user <span class="detail">'${username}'</span> (ID: ${discordUserId}) to your account. You're all set — you can close this page.</p>
+</div>
+</body>
+</html>`;
+}
+
+function confirmErrorPage({ userId, message }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Couldn't link your Discord account — Easley-Dunn</title>
+<style>${PAGE_STYLES}</style>
+</head>
+<body>
+<div class="card">
+  <div class="accent-bar err"></div>
+  <h1>Couldn't link your Discord account</h1>
+  <p>${message}</p>
+  <a class="btn err" href="/discord/users/${userId}/confirm-page">Try again</a>
+</div>
+</body>
+</html>`;
+}
+
 async function confirmDiscordUsername(req, res) {
   const userId = Number.parseInt(req.params.userId, 10);
   const { username } = req.body;
+  // The plain HTML form posts as x-www-form-urlencoded; API/test callers send
+  // JSON. Only the form path gets a styled HTML page back — JSON behavior for
+  // every existing caller/test is completely unchanged.
+  const isFormSubmit = req.is("urlencoded");
 
   if (!Number.isInteger(userId)) {
-    return res.status(400).json({ success: false, message: "userId must be an integer." });
+    const message = "userId must be an integer.";
+    if (isFormSubmit) {
+      return res.status(400).type("html").send(confirmErrorPage({ userId: req.params.userId, message }));
+    }
+    return res.status(400).json({ success: false, message });
   }
 
   if (!username || typeof username !== "string") {
-    return res.status(400).json({ success: false, message: "username is required." });
+    const message = "username is required.";
+    if (isFormSubmit) {
+      return res.status(400).type("html").send(confirmErrorPage({ userId, message: "Please enter your Discord username." }));
+    }
+    return res.status(400).json({ success: false, message });
   }
 
   const serviceIdVal = await getDiscordServiceId();
@@ -407,19 +551,21 @@ async function confirmDiscordUsername(req, res) {
   );
 
   if (accessRows.length === 0) {
-    return res.status(404).json({
-      success: false,
-      message: `No Discord access record found for user_id '${userId}'.`,
-    });
+    const message = `No Discord access record found for user_id '${userId}'.`;
+    if (isFormSubmit) {
+      return res.status(404).type("html").send(confirmErrorPage({ userId, message }));
+    }
+    return res.status(404).json({ success: false, message });
   }
 
   const { access_id, external_account_identifier: guildId } = accessRows[0];
 
   if (!guildId) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing Discord guild ID (external_account_identifier) on the access record.",
-    });
+    const message = "Missing Discord guild ID (external_account_identifier) on the access record.";
+    if (isFormSubmit) {
+      return res.status(400).type("html").send(confirmErrorPage({ userId, message }));
+    }
+    return res.status(400).json({ success: false, message });
   }
 
   try {
@@ -432,10 +578,18 @@ async function confirmDiscordUsername(req, res) {
       throw new Error(`No Discord member found matching username '${username}' in this guild.`);
     }
 
-    const exactMatch = matches.find(
+    // Discord's search is prefix-based, not exact — "sam" also matches
+    // "samantha99". Falling back to the first prefix hit risked silently
+    // linking the wrong person's Discord account, so an exact match is
+    // required; anything else is a clear error rather than a guess.
+    const matched = matches.find(
       (m) => m.user?.username?.toLowerCase() === username.toLowerCase()
     );
-    const matched = exactMatch || matches[0];
+
+    if (!matched) {
+      throw new Error(`No exact username match found for '${username}' in this guild. Double-check the spelling and try again.`);
+    }
+
     const discordUserId = matched.user?.id;
 
     if (!discordUserId) {
@@ -451,6 +605,10 @@ async function confirmDiscordUsername(req, res) {
 
     console.log(`[Discord] Linked username '${username}' to user ID ${discordUserId} for user_id '${userId}'.`);
 
+    if (isFormSubmit) {
+      return res.type("html").send(confirmSuccessPage({ username: matched.user.username, discordUserId }));
+    }
+
     return res.json({
       success: true,
       message: `Linked Discord user '${matched.user.username}' (${discordUserId}) to user_id '${userId}'.`,
@@ -462,6 +620,10 @@ async function confirmDiscordUsername(req, res) {
     const errMessage = `${error.message} (Code: ${errCode})`;
 
     await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+
+    if (isFormSubmit) {
+      return res.status(500).type("html").send(confirmErrorPage({ userId, message: errMessage }));
+    }
 
     return res.status(500).json({
       success: false,
@@ -483,25 +645,10 @@ async function renderConfirmPage(req, res) {
   const userId = Number.parseInt(req.params.userId, 10);
 
   if (!Number.isInteger(userId)) {
-    return res.status(400).type("html").send("<h1>Invalid link</h1><p>userId must be an integer.</p>");
+    return res.status(400).type("html").send(confirmErrorPage({ userId: req.params.userId, message: "userId must be an integer." }));
   }
 
-  res.type("html").send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>Confirm your Discord username — Easley-Dunn</title>
-</head>
-<body>
-<h1>Confirm your Discord username</h1>
-<p>Enter the Discord username you used to join the Easley-Dunn Discord server. This links your account so we can manage your access.</p>
-<form method="POST" action="/discord/users/${userId}/confirm">
-<label for="username">Discord username</label><br/>
-<input type="text" id="username" name="username" required autofocus />
-<button type="submit">Submit</button>
-</form>
-</body>
-</html>`);
+  res.type("html").send(confirmFormPage(userId));
 }
 
 /**

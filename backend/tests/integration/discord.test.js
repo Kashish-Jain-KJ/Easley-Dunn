@@ -591,7 +591,7 @@ describe("Discord integration", () => {
       }
     });
 
-    it("should fall back to the first result when no exact username match exists", async () => {
+    it("should reject a prefix-only match and NOT silently link the wrong person", async () => {
       global.fetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -603,6 +603,7 @@ describe("Discord integration", () => {
 
       const pool = getPool();
       const originalQuery = pool.query;
+      let loggedErrorMessage = "";
 
       pool.query = jest.fn().mockImplementation((text, params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
@@ -611,14 +612,19 @@ describe("Discord integration", () => {
         if (text.includes("ORDER BY usa.last_synced_at")) {
           return Promise.resolve({ rows: [{ access_id: 402, external_account_identifier: "guild-456" }] });
         }
+        if (text.includes("INSERT INTO log")) {
+          loggedErrorMessage = params ? (params[4] || params[2] || "") : "";
+          return Promise.resolve({ rows: [] });
+        }
         return Promise.resolve({ rows: [] });
       });
 
       try {
         const res = await request(app).post("/discord/users/42/confirm").send({ username: "someone" });
 
-        expect(res.statusCode).toBe(200);
-        expect(res.body.discordUserId).toBe("discord-user-333");
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toContain("No exact username match found for 'someone'");
+        expect(loggedErrorMessage).toContain("No exact username match found");
       } finally {
         pool.query = originalQuery;
       }
@@ -655,6 +661,79 @@ describe("Discord integration", () => {
         expect(res.statusCode).toBe(500);
         expect(res.body.message).toMatch(/Failed to confirm Discord username/i);
         expect(loggedErrorMessage).toContain("No Discord member found");
+      } finally {
+        pool.query = originalQuery;
+      }
+    });
+
+    it("should return a styled HTML success page when submitted as a form (not JSON)", async () => {
+      global.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(JSON.stringify([{ user: { id: "discord-user-999", username: "someone" } }])),
+      });
+
+      const pool = getPool();
+      const originalQuery = pool.query;
+
+      pool.query = jest.fn().mockImplementation((text) => {
+        if (text.includes("SELECT service_id FROM services WHERE service_code")) {
+          return Promise.resolve({ rows: [{ service_id: 11 }] });
+        }
+        if (text.includes("ORDER BY usa.last_synced_at")) {
+          return Promise.resolve({ rows: [{ access_id: 404, external_account_identifier: "guild-456" }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      try {
+        const res = await request(app)
+          .post("/discord/users/42/confirm")
+          .type("form")
+          .send({ username: "someone" });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.headers["content-type"]).toMatch(/html/);
+        expect(res.text).toContain("Discord account linked");
+        expect(res.text).toContain("someone");
+        expect(res.text).toContain("discord-user-999");
+      } finally {
+        pool.query = originalQuery;
+      }
+    });
+
+    it("should return a styled HTML error page with a retry link when submitted as a form and no match is found", async () => {
+      global.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify([])),
+      });
+
+      const pool = getPool();
+      const originalQuery = pool.query;
+
+      pool.query = jest.fn().mockImplementation((text) => {
+        if (text.includes("SELECT service_id FROM services WHERE service_code")) {
+          return Promise.resolve({ rows: [{ service_id: 11 }] });
+        }
+        if (text.includes("ORDER BY usa.last_synced_at")) {
+          return Promise.resolve({ rows: [{ access_id: 405, external_account_identifier: "guild-456" }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      try {
+        const res = await request(app)
+          .post("/discord/users/42/confirm")
+          .type("form")
+          .send({ username: "nobody" });
+
+        expect(res.statusCode).toBe(500);
+        expect(res.headers["content-type"]).toMatch(/html/);
+        expect(res.text).toContain("Couldn't link your Discord account");
+        expect(res.text).toContain("No Discord member found matching username 'nobody'");
+        expect(res.text).toContain('href="/discord/users/42/confirm-page"');
       } finally {
         pool.query = originalQuery;
       }

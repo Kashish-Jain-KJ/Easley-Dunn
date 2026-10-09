@@ -1,4 +1,4 @@
-/**
+ /**
  * @file mail.js
  * @description Shared Nodemailer transporter factory. Extracted from
  * kanboard.controller.js and discord.controller.js, which both had an
