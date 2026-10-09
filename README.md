@@ -8,7 +8,7 @@ Cerberus centralizes user onboarding, role delegation, active access protection,
 
 ## 🌟 Key Features & Capabilities
 
-- **🔐 Password-Based Authentication**: Secure authentication system using password login (`/auth/login`) with session management.
+- **🔐 Password-Based Authentication**: Email + password login (`/auth/login`) with server-side sessions stored in PostgreSQL, idle and absolute timeouts, and immediate revocation on role change or deactivation.
 - **🛡️ Active Access Protection**: Users with active third-party software permissions (`user_service_access`) cannot be marked as `Inactive` until all software accesses are cleanly offboarded.
 - **🔄 Default Role Reset**: Deactivating a user automatically resets their system role to `MEMBER`.
 - **📊 Central Audit Logger (`logUtils.js`)**: Standardized activity logger (`logActivity`) recording all `ONBOARD` and `OFFBOARD` operations (`SUCCESS` / `FAILED`) with error details and timestamps in the PostgreSQL `log` table.
@@ -48,11 +48,19 @@ Cerberus centralizes user onboarding, role delegation, active access protection,
 Create a `.env` file inside the `backend/` directory:
 
 ```env
-PORT=5001
+PORT=5050
 NODE_ENV=development
-DATABASE_URL=postgresql://postgres:password@localhost:5432/easleydunn
-AUTH_JWT_SECRET=your-secret-key-change-in-production
-CORS_ORIGIN=http://localhost:3000
+DATABASE_URL=postgresql://postgres:password@localhost:5432/easleydunn?sslmode=require
+CORS_ORIGINS=http://localhost:3001
+
+# REQUIRED — the backend will not start without this.
+# Generate with: openssl rand -base64 48
+SESSION_SECRET=
+
+# Optional session tuning (defaults shown)
+SESSION_IDLE_MINUTES=30
+SESSION_ABSOLUTE_HOURS=8
+SESSION_SAMESITE=lax
 
 # Provider Credentials Directories (placed in backend/):
 # - googleplay_json/
@@ -85,7 +93,7 @@ Start both backend and frontend development servers concurrently from the **root
 # Install root launcher dependencies
 npm install
 
-# Start both backend (http://localhost:5001) and frontend (http://localhost:3000) concurrently
+# Start both backend (http://localhost:5050) and frontend (http://localhost:3001) concurrently
 npm run dev
 ```
 

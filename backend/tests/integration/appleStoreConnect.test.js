@@ -12,6 +12,16 @@ const app = require("../../src/app");
 const { getPool } = require("../../src/db/database");
 const crypto = require("crypto");
 
+// Stub the session lookup — these tests exercise route wiring and controller
+// behaviour, not authentication. See tests/helpers/authMock.js.
+jest.mock("../../src/middlewares/requireAuth.middleware", () =>
+  jest.fn((req, _res, next) => {
+    req.user = require("../helpers/authMock").TEST_USER;
+    next();
+  })
+);
+
+
 describe("POST /appleStoreConnect/users/:userId", () => {
   let mockPrivateKeyPem;
   let originalKeyId;

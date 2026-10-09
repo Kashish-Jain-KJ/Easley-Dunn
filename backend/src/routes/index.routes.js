@@ -25,6 +25,7 @@ const { discordRoutes, discordPublicRoutes } = require("./discord.routes");
 
 const requireAuth = require("../middlewares/requireAuth.middleware");
 const requireRole = require("../middlewares/requireRole.middleware");
+const requirePasswordCurrent = require("../middlewares/requirePasswordCurrent.middleware");
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.use("/auth", authRoutes);
 router.use("/discord", discordPublicRoutes);
 
 // Protected RBAC routes (Requires minimum OPERATOR role)
-const rbacOperator = [requireAuth, requireRole("OPERATOR")];
+const rbacOperator = [requireAuth, requirePasswordCurrent, requireRole("OPERATOR")];
 
 router.use("/users", rbacOperator, usersRoutes);
 router.use("/services", rbacOperator, servicesRoutes);
@@ -51,6 +52,6 @@ router.use("/kanboard", rbacOperator, kanboardRoutes);
 router.use("/discord", rbacOperator, discordRoutes);
 
 // Role delegation routes (Requires minimum MANAGER role)
-router.use("/admin/roles", rolesRoutes);
+router.use("/admin/roles", requireAuth, requirePasswordCurrent, rolesRoutes);
 
 module.exports = router;
