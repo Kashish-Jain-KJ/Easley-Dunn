@@ -2,18 +2,18 @@
  * @file googleDrive.controller.js
  * @description Request handlers for Google Drive integrations.
  *
- * POST /google-drive/users/:userId          → grant a user access to their mapped Drive folders
- * DELETE /google-drive/users/:userId        → remove a user's access from all their Drive folders
- * GET /google-drive/users/:userId/audit     → list all files/folders still owned by the user
+ * POST /google-drive/users/:userId          → grant a user access to their mapped Drive folder
+ * DELETE /google-drive/users/:userId        → remove a user's access from their Drive folder
  */
 
 "use strict";
 
 const { getPool } = require("../db/database");
 const { google } = require("googleapis");
-const path = require("path");
-const fs = require("fs");
 const { logActivity } = require("../utils/logUtils");
+
+const SERVICE_CODE = "GOOGLE_DRIVE";
+const TARGET_ROLE = "reader";
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
@@ -38,247 +38,304 @@ async function getDriveClient() {
   return google.drive({ version: "v3", auth });
 }
 
+async function getDriveServiceId() {
+  const { rows } = await getPool().query(
+    "SELECT service_id FROM services WHERE service_code = $1",
+    [SERVICE_CODE]
+  );
+  return rows.length > 0 ? rows[0].service_id : null;
+}
+
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 /**
  * POST /google-drive/users/:userId
- * Grants a user access to all Drive folders mapped to them in user_service_access.
+ * Grants a user access to the Drive folder mapped to them in user_service_access.
  * The external_account_identifier stores the folder ID.
  * The external_user_identifier stores the user's email.
  */
 async function onboardGoogleDriveUser(req, res) {
   const { userId } = req.params;
+  const performedBy = req.user?.name || req.user?.email || "System";
 
-  // 1. Fetch all Google Drive access records for this user
-  let { rows: accessRows } = await getPool().query(
-    `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.role_name
-     FROM user_service_access usa
-     JOIN services s ON usa.service_id = s.service_id
-     WHERE usa.user_id = $1 AND s.service_code = 'GOOGLE_DRIVE' AND usa.is_active = false`,
-    [userId]
-  );
-
-  if (accessRows.length === 0) {
-    let serviceIdVal = null;
-    try {
-      const { rows } = await getPool().query(
-        "SELECT service_id FROM services WHERE service_code = 'GOOGLE_DRIVE'"
-      );
-      if (rows.length > 0) serviceIdVal = rows[0].service_id;
-    } catch (dbErr) {
-      console.error(dbErr);
-    }
-
-    // Fetch user's email
-    const { rows: userRows } = await getPool().query(
-      "SELECT email FROM users WHERE user_id = $1",
-      [userId]
-    );
-
-    if (userRows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: `User not found with user_id '${userId}'.`,
-      });
-    }
-
-    const userEmail = userRows[0].email;
-
-    // Fetch folder ID from another record or fallback
-    const { rows: defaultDriveRows } = await getPool().query(
-      `SELECT usa.external_account_identifier 
+  let serviceIdVal = null;
+  try {
+    // 1. Fetch the user's inactive Google Drive access records
+    let { rows: accessRows } = await getPool().query(
+      `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.role_name, usa.service_id
        FROM user_service_access usa
        JOIN services s ON usa.service_id = s.service_id
-       WHERE s.service_code = 'GOOGLE_DRIVE' AND usa.external_account_identifier IS NOT NULL
-       LIMIT 1`
-    );
-    const folderId = defaultDriveRows.length > 0 ? defaultDriveRows[0].external_account_identifier : "1PngrPL6m3lGTWCyge2cOhZuMqcYLi7ve";
-
-    // Insert new inactive access record
-    const { rows: newAccessRows } = await getPool().query(
-      `INSERT INTO user_service_access (user_id, service_id, external_account_identifier, external_user_identifier, is_active, last_synced_at)
-       VALUES ($1, $2, $3, $4, false, NOW())
-       RETURNING access_id, external_account_identifier, external_user_identifier, role_name`,
-      [userId, serviceIdVal, folderId, userEmail]
+       WHERE usa.user_id = $1 AND s.service_code = $2 AND usa.is_active = false`,
+      [userId, SERVICE_CODE]
     );
 
-    accessRows = newAccessRows;
-  }
+    if (accessRows.length === 0) {
+      serviceIdVal = await getDriveServiceId();
 
-  const drive = await getDriveClient();
-  const results = [];
+      if (!serviceIdVal) {
+        throw new Error(`${SERVICE_CODE} service row not found.`);
+      }
 
-  for (const row of accessRows) {
-    const { access_id, external_account_identifier: folderId, external_user_identifier: email, role_name } = row;
-
-    try {
-      // 2. Grant access to the folder
-      await drive.permissions.create({
-        fileId: folderId,
-        sendNotificationEmail: false,
-        requestBody: {
-          type: "user",
-          role: role_name || "reader",
-          emailAddress: email,
-        },
-      });
-
-      // 3. Update is_active to true in the DB
-      await getPool().query(
-        `UPDATE user_service_access SET is_active = true, last_synced_at = NOW() WHERE access_id = $1`,
-        [access_id]
+      // Fetch user's email to create the record
+      const { rows: userRows } = await getPool().query(
+        "SELECT email FROM users WHERE user_id = $1",
+        [userId]
       );
 
-      results.push({ folderId, email, status: "onboarded" });
-    } catch (error) {
-      results.push({ folderId, email, status: "failed", error: error.message });
-    }
-  }
+      if (userRows.length === 0) {
+        const errMessage = `User not found with user_id '${userId}'.`;
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+        return res.status(404).json({ success: false, message: errMessage });
+      }
 
-  res.json({
-    success: true,
-    message: `Onboarding complete for user_id '${userId}'.`,
-    data: results,
-  });
+      const userEmail = userRows[0].email;
+
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+      if (!folderId) {
+        throw new Error("GOOGLE_DRIVE_FOLDER_ID is not configured in the environment.");
+      }
+
+      // Insert new inactive access record
+      const { rows: newAccessRows } = await getPool().query(
+        `INSERT INTO user_service_access (user_id, service_id, external_account_identifier, external_user_identifier, is_active, last_synced_at)
+         VALUES ($1, $2, $3, $4, false, NOW())
+         RETURNING access_id, external_account_identifier, external_user_identifier, role_name, service_id`,
+        [userId, serviceIdVal, folderId, userEmail]
+      );
+
+      accessRows = newAccessRows;
+    }
+
+    // 2. Authenticate with Google Drive
+    const drive = await getDriveClient();
+    const results = [];
+
+    for (const row of accessRows) {
+      const { access_id, external_account_identifier: folderId, external_user_identifier: email, service_id } = row;
+      serviceIdVal = service_id;
+
+      if (!folderId || !email) {
+        const errMessage = "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)";
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+        results.push({ access_id, status: "failed", error: "Missing Folder ID or Email" });
+        continue;
+      }
+
+      try {
+        // 3. Grant access to the folder
+        await drive.permissions.create({
+          fileId: folderId,
+          sendNotificationEmail: false,
+          requestBody: {
+            type: "user",
+            role: TARGET_ROLE,
+            emailAddress: email,
+          },
+        });
+
+        // 4. Update is_active to true in the DB
+        await getPool().query(
+          `UPDATE user_service_access SET is_active = true, last_synced_at = NOW() WHERE access_id = $1`,
+          [access_id]
+        );
+
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS", performedBy });
+
+        console.log(`[GoogleDrive] Successfully added ${email} to folder ${folderId} with role ${TARGET_ROLE}.`);
+        results.push({ access_id, folderId, email, role: TARGET_ROLE, status: "onboarded" });
+      } catch (error) {
+        console.error("Google Drive API Error for row:", error);
+        const errCode = error.code || error.status || "500";
+        const errMessage = `${error.message} (Code: ${errCode})`;
+
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+
+        results.push({ access_id, folderId, email, status: "failed", error: errMessage });
+      }
+    }
+
+    const successCount = results.filter((r) => r.status === "onboarded").length;
+    if (successCount === 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to onboard user to any Google Drive folders.",
+        data: results,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully onboarded user to ${successCount} Google Drive folder(s).`,
+      data: results,
+    });
+  } catch (error) {
+    console.error("Google Drive API Error overall:", error);
+
+    if (!serviceIdVal) {
+      try {
+        serviceIdVal = await getDriveServiceId();
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+    }
+
+    const errCode = error.code || error.status || "500";
+    const errMessage = `${error.message} (Code: ${errCode})`;
+
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to onboard user via Google Drive API.",
+      error: errMessage,
+    });
+  }
 }
 
 /**
  * DELETE /google-drive/users/:userId
- * Removes a user's access from all Drive folders mapped to them.
+ * Removes a user's access from the Drive folder mapped to them.
  * Runs an ownership audit first — if files are still owned by the user, blocks removal.
  */
 async function offboardGoogleDriveUser(req, res) {
   const { userId } = req.params;
+  const performedBy = req.user?.name || req.user?.email || "System";
 
-  // 1. Fetch all active Google Drive access records for this user
-  const { rows: accessRows } = await getPool().query(
-    `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.service_id
-     FROM user_service_access usa
-     JOIN services s ON usa.service_id = s.service_id
-     WHERE usa.user_id = $1 AND s.service_code = 'GOOGLE_DRIVE' AND usa.is_active = true`,
-    [userId]
-  );
+  let serviceIdVal = null;
+  try {
+    // 1. Fetch the user's Google Drive access record
+    const { rows: accessRows } = await getPool().query(
+      `SELECT usa.access_id, usa.external_account_identifier, usa.external_user_identifier, usa.service_id
+       FROM user_service_access usa
+       JOIN services s ON usa.service_id = s.service_id
+       WHERE usa.user_id = $1 AND s.service_code = $2
+       ORDER BY usa.access_id`,
+      [userId, SERVICE_CODE]
+    );
 
-  if (accessRows.length === 0) {
-    let serviceIdVal = null;
-    try {
-      const { rows } = await getPool().query(
-        "SELECT service_id FROM services WHERE service_code = 'GOOGLE_DRIVE'"
-      );
-      if (rows.length > 0) serviceIdVal = rows[0].service_id;
-    } catch (dbErr) {
-      console.error(dbErr);
+    if (accessRows.length === 0) {
+      serviceIdVal = await getDriveServiceId();
+      const errMessage = `Google Drive access record not found for user_id '${userId}'.`;
+
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `${errMessage} (Code: 404)`, performedBy });
+
+      return res.status(404).json({ success: false, message: errMessage });
     }
 
-    await logActivity({
-      userId,
-      serviceId: serviceIdVal,
-      commandType: "OFFBOARD",
-      status: "FAILED",
-      errorMessage: `No active Google Drive access records found for user_id '${userId}'. (Code: 404)`,
-        performedBy: req.user?.name || req.user?.email || "System",
+    const { external_account_identifier: folderId, external_user_identifier: userEmail, service_id } = accessRows[0];
+    serviceIdVal = service_id;
+
+    if (!folderId || !userEmail) {
+      await logActivity({
+        userId,
+        serviceId: serviceIdVal,
+        commandType: "OFFBOARD",
+        status: "FAILED",
+        errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)",
+        performedBy,
       });
 
-    return res.status(404).json({
-      success: false,
-      message: `No active Google Drive access records found for user_id '${userId}'.`,
+      return res.status(400).json({
+        success: false,
+        message: "Missing external_account_identifier (Folder ID) or external_user_identifier (Email) in the database.",
+      });
+    }
+
+    const drive = await getDriveClient();
+
+    // 2. Ownership audit — check for files still owned by this user
+    const ownedFiles = await auditOwnedFiles(drive, userEmail);
+
+    if (ownedFiles.length > 0) {
+      await logActivity({
+        userId,
+        serviceId: serviceIdVal,
+        commandType: "OFFBOARD",
+        status: "FAILED",
+        errorMessage: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`,
+        performedBy,
+      });
+
+      return res.status(409).json({
+        success: false,
+        message: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. Ownership must be transferred before removal.`,
+        ownedFiles,
+      });
+    }
+
+    // 3. Find the user's permissionId on this folder
+    const permList = await drive.permissions.list({
+      fileId: folderId,
+      fields: "permissions(id, emailAddress)",
     });
-  }
 
-  const userEmail = accessRows[0].external_user_identifier;
-  const service_id = accessRows[0].service_id;
-  const drive = await getDriveClient();
+    const permission = permList.data.permissions?.find(
+      (p) => p.emailAddress === userEmail
+    );
 
-  // 2. Ownership audit — check for files still owned by this user
-  const ownedFiles = await auditOwnedFiles(drive, userEmail);
-
-  if (ownedFiles.length > 0) {
-    await logActivity({
-      userId,
-      serviceId: service_id,
-      commandType: "OFFBOARD",
-      status: "FAILED",
-      errorMessage: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`,
-        performedBy: req.user?.name || req.user?.email || "System",
-      });
-
-    return res.status(409).json({
-      success: false,
-      message: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. Ownership must be transferred before removal.`,
-      ownedFiles,
-    });
-  }
-
-  // 3. Remove access from each folder
-  const results = [];
-
-  for (const row of accessRows) {
-    const { access_id, external_account_identifier: folderId } = row;
-
-    try {
-      // Find the user's permissionId on this folder
-      const permList = await drive.permissions.list({
-        fileId: folderId,
-        fields: "permissions(id, emailAddress)",
-      });
-
-      const permission = permList.data.permissions?.find(
-        (p) => p.emailAddress === userEmail
-      );
-
-      if (!permission) {
-        results.push({ folderId, status: "not_found — user may have already lost access" });
-
-        await logActivity({
-          userId,
-          serviceId: service_id,
-          commandType: "OFFBOARD",
-          status: "FAILED",
-          errorMessage: `User permission not found on folder '${folderId}' (already removed or deleted).`,
-        performedBy: req.user?.name || req.user?.email || "System",
-      });
-        continue;
-      }
-
-      // Delete the permission
+    if (permission) {
       await drive.permissions.delete({
         fileId: folderId,
         permissionId: permission.id,
       });
+    }
 
-      // Update is_active to false in the DB
-      await getPool().query(
-        `UPDATE user_service_access SET is_active = false, last_synced_at = NOW() WHERE access_id = $1`,
-        [access_id]
-      );
+    // 4. Update is_active to false in the DB for all of this user's Drive rows
+    await getPool().query(
+      `UPDATE user_service_access
+       SET is_active = false, last_synced_at = NOW()
+       WHERE user_id = $1 AND service_id = $2`,
+      [userId, serviceIdVal]
+    );
 
-      // Insert success log
-      await logActivity({ userId, serviceId: service_id, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
-
-      results.push({ folderId, status: "removed" });
-    } catch (error) {
-      const errCode = error.code || error.status || "500";
-      const errMessage = `${error.message} (Code: ${errCode})`;
-
-      // Insert failure log
+    if (!permission) {
+      // Already removed — nothing to delete, local state is now in sync.
       await logActivity({
         userId,
-        serviceId: service_id,
+        serviceId: serviceIdVal,
         commandType: "OFFBOARD",
-        status: "FAILED",
-        errorMessage: `Folder '${folderId}' deprovisioning failed: ${errMessage}`,
-        performedBy: req.user?.name || req.user?.email || "System",
+        status: "SUCCESS",
+        errorMessage: `Already removed: no permission for ${userEmail} on folder '${folderId}'. Marked inactive.`,
+        performedBy,
       });
 
-      results.push({ folderId, status: "failed", error: error.message });
+      return res.json({
+        success: true,
+        message: `${userEmail} was already removed from Google Drive folder ${folderId}; marked inactive.`,
+      });
     }
-  }
 
-  res.json({
-    success: true,
-    message: `Offboarding complete for user_id '${userId}'.`,
-    data: results,
-  });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS", performedBy });
+
+    console.log(`[GoogleDrive] Successfully removed ${userEmail} from folder ${folderId}.`);
+
+    res.json({
+      success: true,
+      message: `Successfully removed ${userEmail} from Google Drive folder ${folderId}.`,
+    });
+  } catch (error) {
+    console.error("Google Drive API Error:", error);
+
+    if (!serviceIdVal) {
+      try {
+        serviceIdVal = await getDriveServiceId();
+      } catch (dbErr) {
+        console.error(dbErr);
+      }
+    }
+
+    const errCode = error.code || error.status || "500";
+    const errMessage = `${error.message} (Code: ${errCode})`;
+
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to remove user via Google Drive API.",
+      error: errMessage,
+    });
+  }
 }
 
 /**
