@@ -21,7 +21,7 @@ const router = Router();
 // Employee-facing routes that must NEVER require a Cerberus session — the
 // person submitting these has no login at all, just the link from their
 // invite email. Exported separately (discordPublicRoutes) so index.routes.js
-// can mount this one WITHOUT rbacOperator, ahead of the gated router below.
+// can mount this one WITHOUT rbacAdmin, ahead of the gated router below.
 const publicRouter = Router();
 
 // Intentionally undocumented in Swagger and intentionally ungated — not meant

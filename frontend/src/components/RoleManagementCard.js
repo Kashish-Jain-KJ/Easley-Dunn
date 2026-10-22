@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Edit2,
   X,
-  Crown,
   User,
   Users,
   UserPlus,
@@ -21,12 +20,14 @@ import {
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
 
+// ADMIN is not assignable from the UI (the professor is the only admin), so it
+// has no selector card.
 const ALL_ROLES_CONFIG = [
   {
-    value: "MEMBER",
-    title: "Standard Member",
-    tier: "Tier 4",
-    desc: "Tracked system employee onboarded across integrated software",
+    value: "USER",
+    title: "User",
+    tier: "Tier 3",
+    desc: "Student; sees and requests their own access",
     icon: User,
     activeBorder: "border-slate-500 bg-slate-50 ring-2 ring-slate-400/30",
     badgeBg: "bg-slate-100 text-slate-700 border-slate-300",
@@ -34,37 +35,15 @@ const ALL_ROLES_CONFIG = [
     activeText: "text-slate-900",
   },
   {
-    value: "OPERATOR",
-    title: "Access Operator",
-    tier: "Tier 3",
-    desc: "Onboard & offboard employees across connected tools",
-    icon: UserCheck,
-    activeBorder: "border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/30",
-    badgeBg: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    iconBg: "bg-emerald-100 text-emerald-600 border-emerald-200",
-    activeText: "text-emerald-900",
-  },
-  {
-    value: "MANAGER",
-    title: "Access Manager",
+    value: "LEAD",
+    title: "Team Lead",
     tier: "Tier 2",
-    desc: "Delegate Operator access & manage software integrations",
+    desc: "Grants access from their team's pool to their team's members",
     icon: Shield,
     activeBorder: "border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/30",
     badgeBg: "bg-blue-100 text-blue-800 border-blue-200",
     iconBg: "bg-blue-100 text-blue-600 border-blue-200",
     activeText: "text-blue-900",
-  },
-  {
-    value: "ADMIN",
-    title: "Super Admin",
-    tier: "Tier 1",
-    desc: "Full system control, role delegation & console administration",
-    icon: Crown,
-    activeBorder: "border-purple-500 bg-purple-50/60 ring-2 ring-purple-500/30",
-    badgeBg: "bg-purple-100 text-purple-800 border-purple-200",
-    iconBg: "bg-purple-100 text-purple-600 border-purple-200",
-    activeText: "text-purple-900",
   },
 ];
 
@@ -72,7 +51,7 @@ function RoleCardSelector({ value, onChange, availableRoles }) {
   const filtered = ALL_ROLES_CONFIG.filter((r) => availableRoles.includes(r.value));
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {filtered.map((role) => {
         const isSelected = value === role.value;
         const IconComponent = role.icon;
@@ -133,7 +112,7 @@ export default function RoleManagementCard({ showToast }) {
     email: "",
     name: "",
     password: "",
-    role: "OPERATOR",
+    role: "USER",
     isSubmitting: false,
   });
 
@@ -144,20 +123,13 @@ export default function RoleManagementCard({ showToast }) {
     email: "",
     name: "",
     password: "",
-    role: "OPERATOR",
+    role: "USER",
     isSubmitting: false,
   });
 
   const [togglingUserId, setTogglingUserId] = useState(null);
 
-  let availableRoles = [];
-  if (userRole === "ADMIN") {
-    availableRoles = ["MEMBER", "OPERATOR", "MANAGER", "ADMIN"];
-  } else if (userRole === "MANAGER") {
-    availableRoles = ["MEMBER", "OPERATOR", "MANAGER"];
-  } else {
-    availableRoles = ["MEMBER", "OPERATOR"];
-  }
+  const availableRoles = userRole === "ADMIN" ? ["USER", "LEAD"] : [];
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -182,18 +154,14 @@ export default function RoleManagementCard({ showToast }) {
   const metrics = useMemo(() => {
     const totalUsers = users.length;
     const adminCount = users.filter((u) => u.role === "ADMIN").length;
-    const managerCount = users.filter((u) => u.role === "MANAGER").length;
-    const operatorCount = users.filter((u) => u.role === "OPERATOR").length;
-    const memberCount = users.filter((u) => u.role === "MEMBER").length;
-    const consoleAdminsCount = adminCount + managerCount + operatorCount;
+    const leadCount = users.filter((u) => u.role === "LEAD").length;
+    const userCount = users.filter((u) => u.role === "USER").length;
 
     return {
       totalUsers,
       adminCount,
-      managerCount,
-      operatorCount,
-      memberCount,
-      consoleAdminsCount,
+      leadCount,
+      userCount,
     };
   }, [users]);
 
@@ -217,8 +185,7 @@ export default function RoleManagementCard({ showToast }) {
     const { email, name, password, role } = grantModal;
     if (!email) return;
 
-    const isConsoleRole = role !== "MEMBER";
-    if (isConsoleRole && (!password || password.trim().length === 0)) {
+    if (!password || password.trim().length === 0) {
       showToast &&
         showToast({
           type: "error",
@@ -250,7 +217,7 @@ export default function RoleManagementCard({ showToast }) {
           email: "",
           name: "",
           password: "",
-          role: "OPERATOR",
+          role: "USER",
           isSubmitting: false,
         });
         fetchUsers();
@@ -276,7 +243,7 @@ export default function RoleManagementCard({ showToast }) {
 
   // Open Edit Modal for existing user
   const openEditModal = (u) => {
-    const defaultRole = availableRoles.includes(u.role) ? u.role : "OPERATOR";
+    const defaultRole = availableRoles.includes(u.role) ? u.role : "USER";
     setEditModal({
       isOpen: true,
       user: u,
@@ -296,7 +263,7 @@ export default function RoleManagementCard({ showToast }) {
       email: "",
       name: "",
       password: "",
-      role: "OPERATOR",
+      role: "USER",
       isSubmitting: false,
     });
   };
@@ -307,8 +274,7 @@ export default function RoleManagementCard({ showToast }) {
     const { user, email: targetEmail, name: targetName, role: targetRole, password: targetPassword } = editModal;
     if (!targetEmail) return;
 
-    const isConsoleRole = targetRole !== "MEMBER";
-    const userNeedsPassword = isConsoleRole && (!user || !user.hasPassword);
+    const userNeedsPassword = !user || !user.hasPassword;
     if (userNeedsPassword && (!targetPassword || targetPassword.trim().length === 0)) {
       showToast &&
         showToast({
@@ -404,26 +370,18 @@ export default function RoleManagementCard({ showToast }) {
     if (String(currentUser?.userId) === String(targetUser.userId)) {
       return false; // Self-modification blocked
     }
-    const targetRole = String(targetUser.role || "MEMBER").toUpperCase();
-    if (userRole === "ADMIN") return true;
-    if (userRole === "MANAGER") {
-      return targetRole !== "ADMIN";
-    }
-    if (userRole === "OPERATOR") {
-      return targetRole === "MEMBER" || targetRole === "OPERATOR";
-    }
-    return false;
+    const targetRole = String(targetUser.role || "").toUpperCase();
+    // Mirrors the API: only ADMIN edits, and ADMIN accounts are not editable.
+    return userRole === "ADMIN" && targetRole !== "ADMIN";
   };
 
   const getBadgeStyle = (role) => {
     switch (role) {
       case "ADMIN":
         return "bg-purple-100 text-purple-800 border-purple-200 font-bold";
-      case "MANAGER":
+      case "LEAD":
         return "bg-blue-100 text-blue-800 border-blue-200 font-bold";
-      case "OPERATOR":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200 font-bold";
-      case "MEMBER":
+      case "USER":
         return "bg-slate-100 text-slate-700 border-slate-300 font-medium";
       default:
         return "bg-slate-100 text-slate-600 border-slate-200";
@@ -452,10 +410,10 @@ export default function RoleManagementCard({ showToast }) {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Console Administrators</p>
-            <h3 className="text-2xl font-extrabold text-purple-900 mt-0.5">{metrics.consoleAdminsCount}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Team Leads</p>
+            <h3 className="text-2xl font-extrabold text-purple-900 mt-0.5">{metrics.leadCount}</h3>
             <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
-              {metrics.adminCount} Admin • {metrics.managerCount} Mgr • {metrics.operatorCount} Op
+              {metrics.adminCount} Admin
             </p>
           </div>
         </div>
@@ -466,9 +424,9 @@ export default function RoleManagementCard({ showToast }) {
             <User className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tracked Members</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 mt-0.5">{metrics.memberCount}</h3>
-            <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">Onboarded System Employees</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Users</p>
+            <h3 className="text-2xl font-extrabold text-slate-900 mt-0.5">{metrics.userCount}</h3>
+            <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">Students</p>
           </div>
         </div>
       </div>
@@ -486,7 +444,7 @@ export default function RoleManagementCard({ showToast }) {
             </div>
 
             <button
-              onClick={() => setGrantModal({ isOpen: true, email: "", name: "", password: "", role: "OPERATOR", isSubmitting: false })}
+              onClick={() => setGrantModal({ isOpen: true, email: "", name: "", password: "", role: "USER", isSubmitting: false })}
               className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-sm rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] cursor-pointer whitespace-nowrap"
             >
               <UserPlus className="w-4 h-4" />
@@ -513,9 +471,8 @@ export default function RoleManagementCard({ showToast }) {
               {[
                 { label: "All Users", value: "ALL" },
                 { label: "Admin", value: "ADMIN" },
-                { label: "Manager", value: "MANAGER" },
-                { label: "Operator", value: "OPERATOR" },
-                { label: "Member", value: "MEMBER" },
+                { label: "Lead", value: "LEAD" },
+                { label: "User", value: "USER" },
               ].map((filter) => (
                 <button
                   key={filter.value}
@@ -576,11 +533,7 @@ export default function RoleManagementCard({ showToast }) {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-xs">
-                        {u.role === "MEMBER" ? (
-                          <span className="inline-flex items-center gap-1 text-slate-500 font-medium bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200" title="Standard Members do not have Cerberus Console login access">
-                            N/A (No Console Login)
-                          </span>
-                        ) : u.hasPassword ? (
+                        {u.hasPassword ? (
                           <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                             <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Configured
                           </span>
@@ -716,28 +669,15 @@ export default function RoleManagementCard({ showToast }) {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
-                    {grantModal.role !== "MEMBER" ? (
-                      <>
-                        Initial Password <span className="text-red-500">*</span>
-                      </>
-                    ) : (
-                      "Initial Password (Optional)"
-                    )}
+                    Initial Password <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <input
                       type="password"
-                      placeholder={
-                        grantModal.role !== "MEMBER"
-                          ? "Set initial password (Required for login)"
-                          : "No password required for Standard Members"
-                      }
+                      placeholder="Set initial password (Required for login)"
                       value={grantModal.password}
                       onChange={(e) => setGrantModal((prev) => ({ ...prev, password: e.target.value }))}
-                      className={`w-full pl-9 pr-3 py-2.5 text-sm rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${grantModal.role !== "MEMBER"
-                          ? "bg-amber-50/50 border border-amber-300"
-                          : "bg-slate-50 border border-slate-200"
-                        }`}
+                      className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all bg-amber-50/50 border border-amber-300"
                     />
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   </div>
@@ -768,7 +708,7 @@ export default function RoleManagementCard({ showToast }) {
                   disabled={
                     grantModal.isSubmitting ||
                     !grantModal.email ||
-                    (grantModal.role !== "MEMBER" && !grantModal.password)
+                    !grantModal.password
                   }
                   className="px-5 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
                 >
@@ -837,7 +777,7 @@ export default function RoleManagementCard({ showToast }) {
 
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
-                  {editModal.role !== "MEMBER" && !editModal.user?.hasPassword ? (
+                  {!editModal.user?.hasPassword ? (
                     <>
                       Initial Password <span className="text-red-500">*</span>
                     </>
@@ -849,25 +789,23 @@ export default function RoleManagementCard({ showToast }) {
                   <input
                     type="password"
                     placeholder={
-                      editModal.role !== "MEMBER" && !editModal.user?.hasPassword
-                        ? "Set initial password (Required for console login)"
-                        : editModal.role === "MEMBER"
-                        ? "No password required for Standard Members"
+                      !editModal.user?.hasPassword
+                        ? "Set initial password (Required for login)"
                         : "Reset Password (Leave blank to keep current)"
                     }
                     value={editModal.password}
                     onChange={(e) => setEditModal((prev) => ({ ...prev, password: e.target.value }))}
                     className={`w-full pl-9 pr-3 py-2.5 text-sm rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
-                      editModal.role !== "MEMBER" && !editModal.user?.hasPassword
+                      !editModal.user?.hasPassword
                         ? "bg-amber-50/50 border border-amber-300"
                         : "bg-slate-50 border border-slate-200"
                     }`}
                   />
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 </div>
-                {editModal.role !== "MEMBER" && !editModal.user?.hasPassword && (
+                {!editModal.user?.hasPassword && (
                   <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1 font-medium">
-                    <AlertCircle className="w-3 h-3 text-amber-600 flex-shrink-0" /> Password not set yet. Initial password is required for Console access roles.
+                    <AlertCircle className="w-3 h-3 text-amber-600 flex-shrink-0" /> Password not set yet. An initial password is required to log in.
                   </p>
                 )}
               </div>
@@ -895,7 +833,7 @@ export default function RoleManagementCard({ showToast }) {
                   type="submit"
                   disabled={
                     editModal.isSubmitting ||
-                    (editModal.role !== "MEMBER" && !editModal.user?.hasPassword && !editModal.password)
+                    (!editModal.user?.hasPassword && !editModal.password)
                   }
                   className="px-5 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
                 >

@@ -2,7 +2,7 @@
  * @file session.service.js
  * @description Session lifecycle operations, called from controllers.
  *
- * Sessions live in easleydunn.session (see sql/001_create_session_table.sql).
+ * Sessions live in <DB_SCHEMA>.session (see sql/001_create_session_table.sql).
  * The cookie holds only an opaque id, so everything here operates on the
  * server-side row — which is what makes logout and revocation actually end a
  * session rather than just deleting the client's copy.

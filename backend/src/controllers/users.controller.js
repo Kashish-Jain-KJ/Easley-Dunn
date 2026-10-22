@@ -20,7 +20,7 @@ const { logActivity } = require("../utils/logUtils");
  */
 async function getUsers(_req, res) {
   const { rows } = await getPool().query(
-    "SELECT *, first_name || ' ' || last_name AS name FROM easleydunn.users ORDER BY user_id ASC"
+    "SELECT *, first_name || ' ' || last_name AS name FROM users ORDER BY user_id ASC"
   );
 
   res.json({
@@ -50,7 +50,7 @@ async function createSystemUser(req, res) {
   const pool = getPool();
 
   const { rows: existing } = await pool.query(
-    "SELECT user_id FROM easleydunn.users WHERE LOWER(email) = $1",
+    "SELECT user_id FROM users WHERE LOWER(email) = $1",
     [normalizedEmail]
   );
 
@@ -68,8 +68,8 @@ async function createSystemUser(req, res) {
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO easleydunn.users (first_name, last_name, email, is_active, start_date, "Role")
-     VALUES ($1, $2, $3, true, CURRENT_DATE, 'MEMBER')
+    `INSERT INTO users (first_name, last_name, email, is_active, start_date, "Role")
+     VALUES ($1, $2, $3, true, CURRENT_DATE, 'USER')
      RETURNING user_id, first_name, last_name, email, is_active, start_date, "Role"`,
     [finalFirstName, finalLastName, normalizedEmail]
   );

@@ -9,10 +9,8 @@ function Header({ activeCount, inactiveCount }) {
     switch (r) {
       case "ADMIN":
         return "bg-purple-100 text-purple-800 border-purple-200";
-      case "MANAGER":
+      case "LEAD":
         return "bg-blue-100 text-blue-800 border-blue-200";
-      case "OPERATOR":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200";
       default:
         return "bg-slate-100 text-slate-600 border-slate-200";
     }
@@ -40,12 +38,14 @@ function Header({ activeCount, inactiveCount }) {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-100 text-slate-600 rounded-full font-medium text-xs select-none border border-slate-200">
-          <Users className="w-4 h-4 text-slate-500" />
-          <span>{activeCount} active</span>
-          <span className="text-slate-300">·</span>
-          <span>{inactiveCount} inactive</span>
-        </div>
+        {activeCount !== undefined && (
+          <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-100 text-slate-600 rounded-full font-medium text-xs select-none border border-slate-200">
+            <Users className="w-4 h-4 text-slate-500" />
+            <span>{activeCount} active</span>
+            <span className="text-slate-300">·</span>
+            <span>{inactiveCount} inactive</span>
+          </div>
+        )}
 
         {user && (
           <div className="flex items-center gap-3 pl-2 border-l border-slate-200">

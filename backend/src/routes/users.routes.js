@@ -53,11 +53,11 @@ const router = Router();
  *                       name: { type: string, example: "John Doe" }
  *                       email: { type: string, example: "john.doe@company.com" }
  *                       is_active: { type: boolean, example: true }
- *                       Role: { type: string, example: "MEMBER" }
+ *                       Role: { type: string, example: "USER" }
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Forbidden (Requires OPERATOR role)
+ *         description: Forbidden (Requires ADMIN role)
  */
 router.get("/", asyncHandler(getUsers));
 
@@ -113,7 +113,7 @@ router.get("/", asyncHandler(getUsers));
  *                     name: { type: string, example: "John Doe" }
  *                     email: { type: string, example: "john.doe@company.com" }
  *                     is_active: { type: boolean, example: true }
- *                     Role: { type: string, example: "MEMBER" }
+ *                     Role: { type: string, example: "USER" }
  *       400:
  *         description: Email is missing or user with email already exists
  *       401:

@@ -19,10 +19,9 @@ const router = Router();
  *   post:
  *     summary: Grant or update a user's Cerberus console role
  *     description: >
- *       Assigns or modifies console roles according to hierarchical RBAC rules.
- *       ADMIN can grant ADMIN, MANAGER, OPERATOR, or MEMBER.
- *       MANAGER can grant MANAGER, OPERATOR, or MEMBER.
- *       OPERATOR can grant OPERATOR or MEMBER.
+ *       ADMIN only. Assigns LEAD or USER to a new or existing user.
+ *       ADMIN cannot be granted, and existing ADMIN accounts cannot be edited.
+ *       An initial password is required if the user has none (every role can log in).
  *     tags: [Roles & Permissions]
  *     security:
  *       - cookieAuth: []
@@ -39,18 +38,18 @@ const router = Router();
  *               email:
  *                 type: string
  *                 format: email
- *                 example: "operator@easleydunn.com"
+ *                 example: "lead@easleydunn.com"
  *               name:
  *                 type: string
  *                 example: "Jane Doe"
  *               role:
  *                 type: string
- *                 enum: [ADMIN, MANAGER, OPERATOR, MEMBER]
- *                 example: "OPERATOR"
+ *                 enum: [LEAD, USER]
+ *                 example: "LEAD"
  *               password:
  *                 type: string
  *                 format: password
- *                 description: "Initial password for new console accounts (min 6 characters)"
+ *                 description: "Initial password, required if the user has none (min 12 characters)"
  *                 example: "Passw0rd123!"
  *     responses:
  *       200:
@@ -61,29 +60,29 @@ const router = Router();
  *               type: object
  *               properties:
  *                 success: { type: boolean, example: true }
- *                 message: { type: string, example: "Successfully granted 'OPERATOR' role to operator@easleydunn.com." }
+ *                 message: { type: string, example: "Successfully granted 'LEAD' role to lead@easleydunn.com." }
  *                 emailSent: { type: boolean, example: true }
  *                 user:
  *                   type: object
  *                   properties:
  *                     userId: { type: integer, example: 5 }
- *                     email: { type: string, example: "operator@easleydunn.com" }
- *                     role: { type: string, example: "OPERATOR" }
+ *                     email: { type: string, example: "lead@easleydunn.com" }
+ *                     role: { type: string, example: "LEAD" }
  *       400:
  *         description: Missing fields, invalid role, password too short, or self-modification blocked
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Forbidden — Insufficient RBAC permission to grant target role
+ *         description: Forbidden — caller is not ADMIN, or target is an ADMIN account
  */
-router.post("/grant", requireAuth, requireRole("OPERATOR"), asyncHandler(grantRole));
+router.post("/grant", requireAuth, requireRole("ADMIN"), asyncHandler(grantRole));
 
 /**
  * @swagger
  * /admin/roles/{userId}:
  *   delete:
- *     summary: Revoke Cerberus console role
- *     description: Resets user role to MEMBER and clears credentials according to hierarchy permissions.
+ *     summary: Reset a user's role to USER
+ *     description: Sets the role to USER and ends the user's sessions. Login is kept; to withdraw login, deactivate the user.
  *     tags: [Roles & Permissions]
  *     security:
  *       - cookieAuth: []
@@ -103,17 +102,17 @@ router.post("/grant", requireAuth, requireRole("OPERATOR"), asyncHandler(grantRo
  *               type: object
  *               properties:
  *                 success: { type: boolean, example: true }
- *                 message: { type: string, example: "Successfully revoked Cerberus console access for operator@easleydunn.com." }
+ *                 message: { type: string, example: "Role for lead@easleydunn.com reset to 'USER'." }
  *       400:
  *         description: Self-revocation blocked
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Insufficient permission to revoke target user's role
+ *         description: Caller is not ADMIN, or target is an ADMIN account
  *       404:
  *         description: User not found
  */
-router.delete("/:userId", requireAuth, requireRole("OPERATOR"), asyncHandler(revokeRole));
+router.delete("/:userId", requireAuth, requireRole("ADMIN"), asyncHandler(revokeRole));
 
 /**
  * @swagger
@@ -152,11 +151,11 @@ router.delete("/:userId", requireAuth, requireRole("OPERATOR"), asyncHandler(rev
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Insufficient permission to modify target user's status
+ *         description: Caller is not ADMIN, or target is an ADMIN account
  *       404:
  *         description: User not found
  */
-router.patch("/:userId/status", requireAuth, requireRole("OPERATOR"), asyncHandler(toggleUserStatus));
+router.patch("/:userId/status", requireAuth, requireRole("ADMIN"), asyncHandler(toggleUserStatus));
 
 /**
  * @swagger
@@ -194,7 +193,7 @@ router.patch("/:userId/status", requireAuth, requireRole("OPERATOR"), asyncHandl
  *       403:
  *         description: Insufficient permission
  */
-router.get("/users", requireAuth, requireRole("OPERATOR"), asyncHandler(getRoleUsers));
+router.get("/users", requireAuth, requireRole("ADMIN"), asyncHandler(getRoleUsers));
 
 module.exports = router;
 

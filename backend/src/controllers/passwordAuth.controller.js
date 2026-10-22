@@ -43,7 +43,7 @@ async function login(req, res) {
 
   const { rows } = await pool.query(
     `SELECT user_id, email, first_name, last_name, "Role", is_active, password_hash, requires_password_change
-     FROM easleydunn.users
+     FROM users
      WHERE LOWER(email) = $1`,
     [normalizedEmail]
   );
@@ -80,7 +80,7 @@ async function login(req, res) {
   await establishSession(req, user.user_id);
 
   await pool.query(
-    `UPDATE easleydunn.users SET last_login_at = NOW() WHERE user_id = $1`,
+    `UPDATE users SET last_login_at = NOW() WHERE user_id = $1`,
     [user.user_id]
   );
 
@@ -126,7 +126,7 @@ async function changePassword(req, res) {
   const pool = getPool();
   const { rows } = await pool.query(
     `SELECT user_id, email, first_name, last_name, "Role", password_hash
-     FROM easleydunn.users WHERE user_id = $1`,
+     FROM users WHERE user_id = $1`,
     [userId]
   );
 
@@ -150,7 +150,7 @@ async function changePassword(req, res) {
   const newPasswordHash = await bcrypt.hash(newPassword + PEPPER, BCRYPT_COST);
 
   await pool.query(
-    `UPDATE easleydunn.users
+    `UPDATE users
         SET password_hash = $1, requires_password_change = false
       WHERE user_id = $2`,
     [newPasswordHash, userId]

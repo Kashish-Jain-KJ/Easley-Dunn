@@ -8,37 +8,33 @@
 const ROLES = {
   ADMIN: {
     name: "ADMIN",
-    title: "Super Admin",
+    title: "Admin",
     tier: 1,
-    level: 4,
-    canLoginConsole: true,
-    description: "Super Admin (Full system control and role delegation)",
-  },
-  MANAGER: {
-    name: "MANAGER",
-    title: "Access Manager",
-    tier: 2,
     level: 3,
     canLoginConsole: true,
-    description: "Access Manager (Delegate operator access & onboard/offboard users)",
+    description: "Admin (the professor; full system control)",
   },
-  OPERATOR: {
-    name: "OPERATOR",
-    title: "Access Operator",
-    tier: 3,
+  LEAD: {
+    name: "LEAD",
+    title: "Team Lead",
+    tier: 2,
     level: 2,
     canLoginConsole: true,
-    description: "Access Operator (Onboard and offboard users across integrated software)",
+    description: "Team Lead (grants access from their team's pool to their team's members)",
   },
-  MEMBER: {
-    name: "MEMBER",
-    title: "Standard Member",
-    tier: 4,
+  USER: {
+    name: "USER",
+    title: "User",
+    tier: 3,
     level: 1,
-    canLoginConsole: false,
-    description: "Standard Member (Onboarded System Employee)",
+    canLoginConsole: true,
+    description: "User (student; sees and requests their own access)",
   },
 };
+
+// Roles the API may assign. ADMIN is deliberately absent: the professor is the
+// only admin, so no request can create or edit an ADMIN account.
+const ASSIGNABLE_ROLES = ["LEAD", "USER"];
 
 const VALID_ROLES = Object.keys(ROLES);
 
@@ -56,19 +52,11 @@ function hasConsoleLoginPermission(role) {
   return CONSOLE_LOGIN_ROLES.includes(normalized);
 }
 
-function getAssignableRoles(callerRole) {
-  const normCaller = String(callerRole || "").toUpperCase();
-  const callerLevel = ROLE_LEVELS[normCaller] || 0;
-  return Object.values(ROLES)
-    .filter((r) => r.level <= callerLevel)
-    .map((r) => r.name);
-}
-
 module.exports = {
   ROLES,
   VALID_ROLES,
+  ASSIGNABLE_ROLES,
   ROLE_LEVELS,
   CONSOLE_LOGIN_ROLES,
   hasConsoleLoginPermission,
-  getAssignableRoles,
 };

@@ -48,7 +48,10 @@ function MainDashboard() {
     userName: ""
   });
 
-  const canManageRoles = role === "ADMIN" || role === "MANAGER";
+  // Only the admin uses this console. LEAD and USER can log in but their views
+  // are not built yet, and every admin API call would return 403 for them.
+  const isAdmin = role === "ADMIN";
+  const canManageRoles = isAdmin;
 
   const showToast = useCallback((toast) => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
@@ -152,7 +155,7 @@ function MainDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !isAdmin) return;
 
     const fetchServices = async () => {
       try {
@@ -167,7 +170,7 @@ function MainDashboard() {
     };
     fetchUsers();
     fetchServices();
-  }, [isAuthenticated, fetchUsers]);
+  }, [isAuthenticated, isAdmin, fetchUsers]);
 
   const handleManualAccessToggle = useCallback((access) => {
     setManualAccess(prev => {
@@ -471,6 +474,23 @@ function MainDashboard() {
 
   if (!isAuthenticated) {
     return <LoginPage />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="size-full bg-slate-50 p-8 min-h-screen">
+        <div className="mx-auto max-w-7xl">
+          <Header />
+          <div className="bg-white rounded-2xl p-8 border border-slate-200/80 shadow-sm text-center">
+            <h2 className="text-lg font-bold text-slate-900">Your portal is not available yet</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              The {role === "LEAD" ? "team lead" : "user"} view is being built. Contact the admin for access changes.
+            </p>
+          </div>
+          {requiresPasswordChange && <ResetPasswordModal />}
+        </div>
+      </div>
+    );
   }
 
   return (
