@@ -1,0 +1,104 @@
+REFACTOR SUMMARY — 9 Oct 2026
+Branch: pratyush/refactor. Full detail: docs/refactor/DESIGN.md
+
+===============================================================================
+GOAL
+===============================================================================
+- One place for the professor to onboard/offboard students and grant/revoke their service access.
+- All 9 integrations stay: Drive, Discord, GCP, BigQuery, Firebase, GA, Play, App Store Connect, Kanboard.
+- Industry pattern: joiner-mover-leaver (identity governance). We borrow the patterns, not a product.
+
+===============================================================================
+ROLES
+===============================================================================
+- ADMIN = professor, the only admin.
+- LEAD = team lead, a global role (21 Oct). Leads exactly one team; is_lead on that membership says which.
+- USER = students, can log in.
+- A team can have several leads or none. A LEAD can be a plain member of other teams (no lead powers there).
+- LEAD stops leading -> stays LEAD until admin changes the role manually.
+- MANAGER / OPERATOR removed.
+- No temporary/delegate role for now (considered, dropped 9 Oct).
+- Lead can grant/revoke only from their team's pool, only to their team's members, up to the pool's max level.
+- Only admin manages teams, membership, catalogue, pools, and access requests.
+- Students: see own access, request access, offboarding checklist, enter own identifiers.
+
+===============================================================================
+MODEL
+===============================================================================
+- users             role ADMIN|LEAD|USER, status active->offboarding->inactive, start_date + end_date (info only)
+- teams             name, description, archived not deleted
+- team_members      team + user + is_lead (a user leads at most one team; team can have many leads)
+- resources         catalogue per service (Drive folder, Discord role, GCP project...)
+- team_resources    a team's pool + max_role_name (ceiling a lead can grant)
+- user_identities   Discord username, Apple ID etc. Student enters, admin verifies
+- grants            desired state; role_name per grant (Drive reader/commenter/writer...); source DIRECT or TEAM; replaces user_service_access
+- access_requests   student asks for resource + level, admin approves (may change level) or denies
+- offboarding_tasks e.g. Drive ownership transfer
+- audit_events      append-only, real actor FK; replaces log
+
+===============================================================================
+ARCHITECTURE
+===============================================================================
+- DB: schemas cerberus / cerberus_test, chosen via DB_SCHEMA. node-pg-migrate.
+- route -> controller -> service -> repository. Keep current by-layer folders.
+- Repository layer (new, 14 Oct): all SQL lives in backend/src/repositories/, one file per table
+  (users.repo.js, teams.repo.js, teamMembers.repo.js...), one function per query.
+  Controllers/services never call getPool directly. Fixes copied queries (users by id x14, services by code x~23).
+- Middleware = generic gate (auth, role). Business rules go in services, not middleware.
+- One connector per service: validateIdentity / grant / revoke (+ listAccess, offboardingChecks).
+- Core grant service does permissions, DB state, audit. Connectors only call the external API.
+- Manual connector for anything without an API.
+- Leaving a team auto-revokes team grants, unless another grant still covers the resource.
+- Removing a resource from the catalogue revokes it from everyone.
+
+===============================================================================
+FEATURES NOW
+===============================================================================
+- Teams + members
+- Resource catalogue + team pools
+- Audit log with actor
+- Student portal (own access, requests, checklist, identities)
+- Email notifications
+- Forgot password + admin reset + pepper/HMAC fix
+- Offboarding checklist (Drive files owned by student)
+- End date on profile (from offer letter, set by professor); near it, student is prompted to ask professor for an extension. Never auto-offboards.
+- Prompt shows "2" before end date for now (weeks or months? TBD).
+- Professor sees ending-soon / past-end students as a dashboard list, no email.
+
+===============================================================================
+FEATURES LATER
+===============================================================================
+- Google sign-in (keeping passwords for now)
+- Drift detection (DB vs what services actually have)
+- more TBD
+
+===============================================================================
+BUILD ORDER
+===============================================================================
+0  DB foundation:
+   - new schema cerberus (refactor) + cerberus_test (tests). easleydunn untouched until cutover.
+   - node-pg-migrate, migrations in backend/migrations/
+   - baseline migration = current tables as-is, then seed services
+   - remove hard-coded "easleydunn.<table>" so DB_SCHEMA picks the schema
+   - jest forces DB_SCHEMA=cerberus_test, refuses non-_test schema
+   - fix frontend build (sidebar.js)
+1a teams + members ("leads at most one team" unique index)   <- after 0
+1b roles ADMIN/LEAD/USER, audit_events, user_identities
+1c catalogue + pools + grant service + Drive connector (end to end)
+2  port the other 8 connectors, retire user_service_access and log
+3  requests, end-date prompt + extension, offboarding flow, emails, password self-service
+
+===============================================================================
+OPEN
+===============================================================================
+- Is easleydunn data real? Copy it into cerberus (script, explicit go only)?
+- Access detail level: whole service vs per resource
+- Non-linear access levels (GCP IAM): pool ceiling won't work, need allowed-list?
+- LEAD role lands in 1b but is_lead needs it: flag anyone in 1a, enforce in 1b (proposed)?
+- Drive ownership transfer on personal Gmail: needs a test
+- What do existing MANAGER/OPERATOR users become?
+- Teams: backend first, or backend + UI together?
+- End date: unit of the "2"? extension request type? what student sees after the date?
+- Transactions: repo functions take db as first arg + withTransaction helper (proposed)? Decide before 1a.
+- Move old controller SQL into repos as each feature is ported (proposed), or all up front?
+
