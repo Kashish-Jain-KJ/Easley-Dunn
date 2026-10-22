@@ -13,8 +13,25 @@ const { ASSIGNABLE_ROLES } = require("../config/roles.config");
 const { splitName } = require("../utils/userUtils");
 const appConfig = require("../config/app.config");
 const { revokeAllForUser } = require("../services/session.service");
+const { withTransaction } = require("../db/transaction");
+const { clearLeadOnRoleChange } = require("../services/teams.service");
 
 const PEPPER = appConfig.passwordPepper;
+
+/**
+ * Runs a role-changing UPDATE. If it moves a user off LEAD, their team lead flag
+ * is cleared and audited in the same transaction, so no non-LEAD leads a team.
+ */
+async function updateRole(sql, params, { userId, fromRole, toRole, actorUserId }) {
+  if (fromRole !== "LEAD" || toRole === "LEAD") {
+    await getPool().query(sql, params);
+    return;
+  }
+  await withTransaction(async (db) => {
+    await db.query(sql, params);
+    await clearLeadOnRoleChange(userId, toRole, actorUserId, db);
+  });
+}
 const BCRYPT_COST = 12;
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -72,16 +89,18 @@ async function grantRole(req, res) {
     }
 
     if (passwordHash) {
-      await pool.query(
+      await updateRole(
         `UPDATE users SET "Role" = $1, password_hash = $2, requires_password_change = true WHERE user_id = $3`,
-        [targetRole, passwordHash, userId]
+        [targetRole, passwordHash, userId],
+        { userId, fromRole: currentTargetRole, toRole: targetRole, actorUserId: req.user.userId }
       );
       // Credentials were reset by an administrator — sign the user out everywhere.
       await revokeAllForUser(userId);
     } else {
-      await pool.query(
+      await updateRole(
         `UPDATE users SET "Role" = $1 WHERE user_id = $2`,
-        [targetRole, userId]
+        [targetRole, userId],
+        { userId, fromRole: currentTargetRole, toRole: targetRole, actorUserId: req.user.userId }
       );
       // OWASP: a privilege level change must not be inherited by a session
       // that predates it. The change is made by an admin from a different
@@ -157,9 +176,10 @@ async function revokeRole(req, res) {
     throw ApiError.forbidden("Admin accounts cannot be edited through the API.");
   }
 
-  await pool.query(
+  await updateRole(
     `UPDATE users SET "Role" = 'USER' WHERE user_id = $1`,
-    [userId]
+    [userId],
+    { userId, fromRole: targetRole, toRole: "USER", actorUserId: callerUserId }
   );
 
   // A privilege change must not be inherited by a session that predates it.
@@ -251,9 +271,10 @@ async function toggleUserStatus(req, res) {
   }
 
   if (!newIsActive) {
-    await pool.query(
+    await updateRole(
       `UPDATE users SET is_active = false, "Role" = 'USER' WHERE user_id = $1`,
-      [userId]
+      [userId],
+      { userId, fromRole: targetRole, toRole: "USER", actorUserId: callerUserId }
     );
     // Deactivation takes effect immediately, including for anyone logged in.
     await revokeAllForUser(userId);

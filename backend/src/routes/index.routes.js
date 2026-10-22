@@ -22,6 +22,7 @@ const googleCloudRoutes = require("./googleCloud.routes");
 const firebaseRoutes = require("./firebase.routes");
 const kanboardRoutes = require("./kanboard.routes");
 const { discordRoutes, discordPublicRoutes } = require("./discord.routes");
+const teamsRoutes = require("./teams.routes");
 
 const requireAuth = require("../middlewares/requireAuth.middleware");
 const requireRole = require("../middlewares/requireRole.middleware");
@@ -50,6 +51,7 @@ router.use("/google-cloud", rbacAdmin, googleCloudRoutes);
 router.use("/firebase", rbacAdmin, firebaseRoutes);
 router.use("/kanboard", rbacAdmin, kanboardRoutes);
 router.use("/discord", rbacAdmin, discordRoutes);
+router.use("/teams", rbacAdmin, teamsRoutes);
 
 // Role management routes (ADMIN only, enforced in roles.routes.js)
 router.use("/admin/roles", requireAuth, requirePasswordCurrent, rolesRoutes);
