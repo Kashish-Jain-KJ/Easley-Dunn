@@ -54,7 +54,7 @@ Each point is from reading the code on `pratyush/refactor` as of 2026-10-09.
 | G8 | Onboarding a Drive user is logged as an offboarding. | `to-do/google drive.txt` |
 | G9 | The frontend production build fails: `sidebar.js` uses Tailwind v4 syntax on Tailwind v3. | `frontend/src/components/ui/sidebar.js:132,135` |
 | G10 | There are no teams, no access requests, no student-facing views, and no forgot/reset password. | — |
-| G11 | Schema name is hard-coded. `DB_SCHEMA` sets `search_path`, but queries also say `easleydunn.<table>` explicitly, so changing the env var doesn't move them to another schema. (Some `easleydunn.` matches are the `easleydunn.com` email domain and are fine.) | `roles.controller.js` (13), `passwordAuth.controller.js` (4), `users.controller.js` (3), `roles.routes.js`, `auth.routes.js`, `requireAuth.middleware.js:43` |
+| G11 | **Fixed 2026-10-21.** Schema name is hard-coded. `DB_SCHEMA` sets `search_path`, but queries also say `easleydunn.<table>` explicitly, so changing the env var doesn't move them to another schema. (Some `easleydunn.` matches are the `easleydunn.com` email domain and are fine.) | `roles.controller.js` (13), `passwordAuth.controller.js` (4), `users.controller.js` (3), `roles.routes.js`, `auth.routes.js`, `requireAuth.middleware.js:43` |
 | G12 | The same SQL is copied across files: `SELECT … FROM users WHERE user_id = $1` 14 times, `SELECT … FROM services WHERE service_code = …` about 23 times. There is no data-access layer; controllers call `getPool().query` directly. | `backend/src/controllers/*.controller.js` |
 
 ---
@@ -313,11 +313,22 @@ Granularity, decided 2026-10-14: **one file per table**, named in camelCase like
 `src/` (`users.repo.js`, `services.repo.js`, `teams.repo.js`, `teamMembers.repo.js`, …). A
 single file would grow past 1,000 lines once teams, grants, audit and resources exist.
 
-**[OPEN]** Transactions: there is no `@Transactional`. Proposed: every repository function takes
-the DB handle as its first argument (`findById(db, id)`, where `db` is the pool or a transaction
-client), and a `withTransaction(fn)` helper in `db/` gives a service one client for
-`BEGIN`/`COMMIT`/`ROLLBACK`. Needed for the role-demotion flag clear (§3.1) and the grant flow (§5 step 2).
-Decide before 1a, because it fixes every repository function's signature.
+**Queries and transactions** (decided 2026-10-21):
+- Like Spring Data repositories: one file per table. Simple lookups are plain functions
+  (`findByTeamId`); logic-heavy features get **their own named query** in the repository of
+  the main table they touch (the equivalent of an `@Query` method).
+- Every repository function takes the DB handle as an optional **last** argument that
+  defaults to the pool: `findByTeamId(teamId, db = getPool())`. Normal calls don't pass it.
+- `withTransaction(work)` in `backend/src/db/transaction.js` is the `@Transactional`
+  equivalent: one connection, `BEGIN`, run `work(client)`, `COMMIT`, or `ROLLBACK` on error.
+- **Used only to keep a change and its audit entry together**, so no access change can exist
+  without its log. Other steps run separately.
+- **Every step fails with its own specific error** (e.g. 409 "still owns 3 Drive files",
+  502 "Drive refused to remove access", 404 "not a member"). A rollback does not hide which
+  step failed; the error says what failed and that nothing was changed.
+- External calls (Drive etc.) are never inside a DB transaction. Order for changes that remove
+  access: ownership check → revoke externally → DB change + audit (one transaction).
+- Before coding a feature: write out its steps and the error for each failure, then build.
 
 **[OPEN]** When existing queries move: proposed, new code uses repositories from 1a on, and
 each old controller's SQL moves when that feature is ported (1b–2), not all at once up front.
@@ -450,58 +461,46 @@ Vertical slice first: get one path working end to end, then repeat the pattern.
 
 | Phase | Content |
 |---|---|
-| 0 | **DB foundation** (§10.0): new `cerberus` schema, `cerberus_test` schema, node-pg-migrate, baseline migration, remove hard-coded schema names (G11). Also fix the frontend build (G9). |
+| 0 | **DB foundation** (§10.0), done 2026-10-21: `refactor` schema, node-pg-migrate, baseline migration, hard-coded schema names removed (G11). Frontend build (G9) still to check. |
 | 1a | **Teams + members** (detailed below). |
-| 1b | Role change (ADMIN/LEAD/USER, remove MANAGER/OPERATOR), `audit_events`, `user_identities`. |
+| 1b | ~~Role change (ADMIN/LEAD/USER)~~ done early, 2026-10-21. Remaining: `audit_events`, `user_identities`. |
 | 1c | `resources` + `team_resources`, core grant service, **Drive connector**. Admin, lead and student UI for Drive. |
 | 2 | Port the other eight integrations onto the connector contract. Retire `user_service_access` and `log`. |
 | 3 | Access requests, end-date prompt + extension request, offboarding workflow + checklist, email notifications, password self-service. |
 
-### 10.0 Phase 0: DB foundation
+### 10.0 Phase 0: DB foundation (done 2026-10-21)
 
-The refactor gets its own schema. The old `easleydunn` schema is **not altered**; it keeps
-serving the current app until cutover.
+The refactor has its own schema. The old `easleydunn` schema is **not altered**; it keeps
+serving the current app until cutover, when `refactor` becomes the primary schema.
 
 | Schema | Purpose |
 |---|---|
 | `easleydunn` | Current app. Untouched. |
-| `cerberus` | Refactor branch. |
-| `cerberus_test` | Integration tests only. Never holds real data. |
+| `refactor` | Refactor branch **and** integration tests. Full copy of `easleydunn`, data included (it is valid test data). |
 
-The app chooses the schema with the existing `DB_SCHEMA` env var
-(`backend/src/config/db.config.js` → `search_path` in `backend/src/db/database.js`).
+The app chooses the schema with `DB_SCHEMA` (`backend/src/config/db.config.js` → `search_path`
+in `backend/src/db/database.js`). No query names a schema (G11 fixed).
 
-**A. Migration tool: node-pg-migrate**
-- backend devDependency; migrations in `backend/migrations/`.
-- `npm run migrate` targets `cerberus`, `npm run migrate:test` targets `cerberus_test`, and
-  `migrate:down` rolls back one step.
-- Migrations use unqualified table names, so one set of migrations builds either schema.
-- **[UNVERIFIED]** Supabase SSL may need `--reject-unauthorized false` (the app already uses
-  `rejectUnauthorized: false`). Try against `cerberus_test` first.
-- Running migrations changes the live Supabase project, so Pratyush runs them or explicitly
-  says to.
+**What was done**
+- Pratyush created `refactor` in the Supabase SQL editor: tables copied with `LIKE … INCLUDING
+  ALL`, data copied, FKs re-added, identity sequences moved past the copied rows. Row counts
+  verified equal (6 users, 11 services, 14 access rows, 34 log rows).
+- Roles converted in `refactor`: MANAGER account (Ashutosh Thakkar) deleted with all
+  its data: 5 access rows and 12 log rows, MEMBER → USER, `CHECK ("Role" IN ('ADMIN','LEAD','USER'))`.
+- `easleydunn.` removed from every query; `.env` has `DB_SCHEMA=refactor`.
 
-**B. Baseline migration.** This is the standard approach when adding a migration tool to an
-existing database.
-- `0001_baseline` recreates the current tables as they are: `users`, `services`,
-  `user_service_access`, `log`, `session` (with the `sql/001` indexes), and
-  `cerberus_admin_tokens` if it still exists. That way the branch app keeps working on
-  `cerberus` while features are ported one by one.
-- The DDL is read from the live DB **read-only** (no `pg_dump`/`psql` locally; use Supabase
-  `information_schema` queries).
-- `0002_seed_services` adds the `services` reference rows, copied from `easleydunn.services`.
-- **[OPEN]** Copy users/access data from `easleydunn` into `cerberus`? The copy doesn't change
-  the old schema. Without it nobody, including the admin, can log in on the branch. Proposed: a
-  one-off script `backend/scripts/copy-from-easleydunn.js`, run only on explicit go.
+**Migrations: node-pg-migrate**
+- `backend/migrations/`, plain SQL files (`-- Up Migration` / `-- Down Migration`).
+- `npm run migrate <up|down|create name>` → `backend/scripts/migrate.js`, which passes
+  `--schema $DB_SCHEMA` (refuses to run without it) and the app's SSL setting. History is
+  stored in `<schema>.pgmigrations`.
+- `…_baseline.sql` recreates the six existing tables. On `refactor` it is **marked as run, not
+  run** (`npm run migrate up -- --fake`), because the tables already exist.
+- Pratyush runs migrations himself.
 
-**C. Remove hard-coded schema names (G11).** Replace `easleydunn.<table>` with unqualified
-names. Leave the email-domain matches alone.
-
-**D. Test schema wiring**
-- `backend/tests/setupEnv.js` (jest `setupFiles`) sets `DB_SCHEMA=cerberus_test` before the
-  app loads. It **refuses to run if the schema doesn't end in `_test`**.
-- Five existing tests query the DB (`services`, `bigQuery`, `appleStoreConnect`, `googlePlay`,
-  `discord`). Run them against `cerberus_test` and note which ones depend on live data.
+**Tests** (decided 2026-10-21): run against `refactor`. Tests **create their own rows and never
+delete or change existing rows**; they clean up only what they created. Existing rows with
+invalid data are reported to Pratyush, not fixed by tests.
 
 ### 10.1 Step 1a: teams and members
 
@@ -542,14 +541,33 @@ new `TeamsTab.js` component rather than growing `App.js`. It shows the team list
 form; clicking a team shows its members, an add-member picker (from `/users`), a lead toggle
 and a remove button. Teams without a lead show a "No lead — pick one" badge.
 
-**Tests:** `backend/tests/integration/teams.test.js` against `cerberus_test`, cleaning up its
-own rows.
+**Tests:** `backend/tests/integration/teams.test.js` against `refactor`, creating and cleaning up
+only its own rows.
 
 **Not in 1a:** the role rename, lead/student views, resource pools, `audit_events`
 (`created_by`/`added_by` record who did what for now).
 
 **Decided for 1a:** several leads per team allowed, a user leads at most one team (2026-10-21);
-tests run in `cerberus_test`.
+tests run in `refactor` (own rows only).
+
+**Built 2026-10-21 (backend only; UI waits for a design):**
+- Migrations `…_teams.sql` (teams, team_members) and `…_audit-events.sql` (audit_events,
+  append-only via triggers that block UPDATE/DELETE/TRUNCATE). `audit_events` was pulled
+  forward from 1b because every team change is written with its audit entry.
+- `db/transaction.js`, repositories `teams`, `teamMembers`, `users`, `auditEvents`,
+  `services/teams.service.js`, `controllers/teams.controller.js`, `routes/teams.routes.js`
+  mounted at `/teams` behind the admin gate.
+- Refused attempts (404/409) are audited as FAILED with the reason; malformed input (400) is not.
+- **Archive** removes all members (each audited as MEMBER_REMOVED, reason "Team archived").
+  Once teams hand out access, archive must first refuse while any member still holds access
+  through the team (decided 2026-10-21: "check for access first").
+- **Remove member** order once teams hand out access: each service's pre-removal check
+  (connector `offboardingChecks`, e.g. Drive owned files; not every service has one) →
+  revoke team access → delete membership + audit.
+- Changing a LEAD's role to USER (edit, reset, deactivate) clears their lead flag and audits
+  it in the same transaction (`roles.controller.js` → `clearLeadOnRoleChange`).
+- Verified against in-memory Postgres (PGlite) with the real migrations: 40 rule checks + 14
+  HTTP checks pass. Not yet run against Supabase.
 
 **Open for 1a:**
 - **[OPEN]** The LEAD role arrives in 1b, but `is_lead` requires role LEAD. Proposed: in 1a any
@@ -564,10 +582,10 @@ tests run in `cerberus_test`.
 | # | Question |
 |---|---|
 | Q1 | ~~Migration tool~~. **Decided: node-pg-migrate** (fits the current `pg` + `DATABASE_URL` setup, no CLI/Docker, up/down). |
-| Q2 | Is the data in `easleydunn` real? Should it be copied into `cerberus` (§10.0 B)? |
+| Q2 | ~~Copy `easleydunn` data?~~ **Decided:** copied into `refactor`; it is valid test data. |
 | Q3 | Access detail level: whole service vs per resource, per integration. |
 | Q4 | Drive ownership-transfer behaviour on personal Gmail (§7 test). |
 | Q5 | Existing MANAGER/OPERATOR users: what do they become? |
 | Q6 | End-date details: unit of the "2" lead time, extension request type, what the student sees after the date (§6.7). |
 | Q7 | Further features. |
-| Q8 | Repository layer details (§5.1): ~~one file per table vs single file~~ **decided: one file per table**; `db`-first-argument + `withTransaction` for transactions; when existing queries move. |
+| Q8 | Repository layer details (§5.1): **decided:** one file per table; `db` as optional last argument + `withTransaction` for change + audit (2026-10-21). Still open: when existing queries move. |

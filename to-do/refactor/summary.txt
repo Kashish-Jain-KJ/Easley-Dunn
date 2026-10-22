@@ -39,7 +39,8 @@ MODEL
 ===============================================================================
 ARCHITECTURE
 ===============================================================================
-- DB: schemas cerberus / cerberus_test, chosen via DB_SCHEMA. node-pg-migrate.
+- DB: schema "refactor" (copy of easleydunn incl. data), chosen via DB_SCHEMA. node-pg-migrate.
+- Tests run in refactor: create own rows, never touch existing ones.
 - route -> controller -> service -> repository. Keep current by-layer folders.
 - Repository layer (new, 14 Oct): all SQL lives in backend/src/repositories/, one file per table
   (users.repo.js, teams.repo.js, teamMembers.repo.js...), one function per query.
@@ -75,15 +76,14 @@ FEATURES LATER
 ===============================================================================
 BUILD ORDER
 ===============================================================================
-0  DB foundation:
-   - new schema cerberus (refactor) + cerberus_test (tests). easleydunn untouched until cutover.
-   - node-pg-migrate, migrations in backend/migrations/
-   - baseline migration = current tables as-is, then seed services
-   - remove hard-coded "easleydunn.<table>" so DB_SCHEMA picks the schema
-   - jest forces DB_SCHEMA=cerberus_test, refuses non-_test schema
-   - fix frontend build (sidebar.js)
+0  DB foundation (done 21 Oct):
+   - schema refactor = full copy of easleydunn incl. data. easleydunn untouched until cutover.
+   - node-pg-migrate, SQL migrations in backend/migrations/, npm run migrate (uses DB_SCHEMA)
+   - baseline migration = current tables as-is; on refactor it is faked, not run
+   - hard-coded "easleydunn.<table>" removed; DB_SCHEMA picks the schema
+   - check frontend build (sidebar.js) - built fine on 21 Oct
 1a teams + members ("leads at most one team" unique index)   <- after 0
-1b roles ADMIN/LEAD/USER, audit_events, user_identities
+1b roles ADMIN/LEAD/USER (done 21 Oct), audit_events, user_identities
 1c catalogue + pools + grant service + Drive connector (end to end)
 2  port the other 8 connectors, retire user_service_access and log
 3  requests, end-date prompt + extension, offboarding flow, emails, password self-service
@@ -91,7 +91,6 @@ BUILD ORDER
 ===============================================================================
 OPEN
 ===============================================================================
-- Is easleydunn data real? Copy it into cerberus (script, explicit go only)?
 - Access detail level: whole service vs per resource
 - Non-linear access levels (GCP IAM): pool ceiling won't work, need allowed-list?
 - LEAD role lands in 1b but is_lead needs it: flag anyone in 1a, enforce in 1b (proposed)?
