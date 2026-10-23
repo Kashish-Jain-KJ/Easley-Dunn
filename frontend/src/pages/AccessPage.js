@@ -7,8 +7,7 @@
  * paginated log that was almost entirely "Signed in · Success", with the two
  * events they cared about buried in it — an audit log is a tool for
  * reconstructing what happened across many people, which is not this. The part
- * worth keeping is on each row: who granted it and when. Sign-ins stayed as a
- * short list, because an entry you don't recognise is worth seeing.
+ * worth keeping is on each row: who granted it and when.
  *
  * Read-only by design for now: nothing a student can do about their own access
  * is built yet. When access requests exist, this is where asking starts and a
@@ -19,8 +18,6 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw, KeyRound } from "lucide-react";
 import * as userApi from "../api/user";
-
-const SIGN_IN_COUNT = 5;
 
 /** The level on a grant, when the connector recorded one. */
 function Level({ roleName }) {
@@ -46,24 +43,16 @@ function Granted({ at, by }) {
 
 export default function AccessPage() {
   const [access, setAccess] = useState([]);
-  const [signIns, setSignIns] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
-      userApi.getAccess(),
-      // AUTH also carries sign-outs and password changes, so ask for a wider
-      // slice than we show and cut it down after filtering — otherwise a run of
-      // sign-outs could push every sign-in off the end.
-      userApi.getActivity({ category: "AUTH", limit: 25 }).catch(() => ({ data: [] })),
-    ])
-      .then(([accessRes, authRes]) => {
-        if (cancelled) return;
-        setAccess(accessRes.data);
-        setSignIns(authRes.data.filter((e) => e.action === "SIGN_IN").slice(0, SIGN_IN_COUNT));
+    userApi
+      .getAccess()
+      .then(({ data }) => {
+        if (!cancelled) setAccess(data);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -154,23 +143,6 @@ export default function AccessPage() {
         </p>
       )}
 
-      {!isLoading && signIns.length > 0 && (
-        <section className="mt-4 bg-white border border-slate-200 rounded-xl px-5 py-4">
-          <h2 className="m-0 text-[13px] font-semibold text-slate-900">Recent sign-ins</h2>
-          <p className="mt-0.5 mb-2 text-xs text-slate-600">
-            Your last {signIns.length === 1 ? "sign-in" : `${signIns.length} sign-ins`}. Tell the admin if one of
-            these wasn't you.
-          </p>
-          <ul className="list-none m-0 p-0 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-slate-700">
-            {signIns.map((e) => (
-              <li key={e.eventId} className="whitespace-nowrap">
-                {new Date(e.createdAt).toLocaleString()}
-                {e.outcome !== "SUCCESS" && <span className="ml-1.5 font-semibold text-red-700">failed</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </main>
   );
 }
