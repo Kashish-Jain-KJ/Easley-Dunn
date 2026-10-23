@@ -9,7 +9,7 @@
 
 const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
-const { removeGooglePlayUser, listGooglePlayUsers, onboardGooglePlayUser } = require("../controllers/googlePlay.controller");
+const { removeGooglePlayUser, onboardGooglePlayUser } = require("../controllers/googlePlay.controller");
 
 const router = Router();
 
@@ -79,6 +79,5 @@ router.post("/users/:userId", asyncHandler(onboardGooglePlayUser));
  *       500:
  *         description: Google Play API request failed or credentials file is missing.
  */
-// router.get("/developers/:developerId/users", asyncHandler(listGooglePlayUsers));
 
 module.exports = router;

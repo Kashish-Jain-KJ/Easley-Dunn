@@ -38,7 +38,7 @@ export default function ConfirmModal({
         {/* Title & Subtitle */}
         <div>
           <h3 className="text-[22px] font-bold text-gray-900 leading-tight">
-            {isAutomate ? "Automated" : "Manual"} {type === "onboard" ? "Onboarding" : "Offboarding"}
+            {isAutomate ? "Automated" : "Manual"} {type === "onboard" ? "Grant" : "Revoke"}
           </h3>
           <p className="text-[#8e98a8] text-base font-medium mt-2">
             {type === "onboard" ? "Granting" : "Revoking"}{" "}

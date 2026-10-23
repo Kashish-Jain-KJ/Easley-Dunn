@@ -43,6 +43,36 @@ async function findLedTeam(userId, db = getPool()) {
   return rows[0] || null;
 }
 
+// The teams a user belongs to, each with its members, for that user's own
+// view. Members come back in the same request because the point of the screen
+// is "who is on my team and who do I ask", which is one question, not one per
+// team. Archived teams are left out: archiving removes everyone anyway, so a
+// row here would describe a team the user is no longer in.
+async function listByUser(userId, db = getPool()) {
+  const { rows } = await db.query(
+    `SELECT t.team_id, t.name, t.description,
+            mine.is_lead AS viewer_is_lead,
+            count(m.user_id) FILTER (WHERE u.is_active)::int AS member_count,
+            coalesce(
+              json_agg(json_build_object('userId', u.user_id, 'email', u.email,
+                                         'name', btrim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, '')),
+                                         'isLead', m.is_lead)
+                       ORDER BY m.is_lead DESC, lower(u.email))
+                FILTER (WHERE m.user_id IS NOT NULL AND u.is_active),
+              '[]'
+            ) AS members
+       FROM team_members mine
+       JOIN teams t ON t.team_id = mine.team_id
+       LEFT JOIN team_members m ON m.team_id = t.team_id
+       LEFT JOIN users u ON u.user_id = m.user_id
+      WHERE mine.user_id = $1 AND t.is_active
+      GROUP BY t.team_id, t.name, t.description, mine.is_lead
+      ORDER BY lower(t.name)`,
+    [userId]
+  );
+  return rows;
+}
+
 async function add({ teamId, userId, isLead, addedBy }, db = getPool()) {
   const { rows } = await db.query(
     `INSERT INTO team_members (team_id, user_id, is_lead, added_by)
@@ -92,4 +122,4 @@ async function clearLeadForUser(userId, db = getPool()) {
   return rows;
 }
 
-module.exports = { find, listByTeam, findLedTeam, add, setLead, remove, removeAllFromTeam, clearLeadForUser };
+module.exports = { find, listByTeam, listByUser, findLedTeam, add, setLead, remove, removeAllFromTeam, clearLeadForUser };

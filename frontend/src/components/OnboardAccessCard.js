@@ -22,7 +22,7 @@ function OnboardAccessCard({
       <Card className="h-full flex items-center justify-center border-dashed border-2 min-h-[300px]">
         <CardContent className="text-center py-12">
           <UserPlus className="size-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">Select a user to view onboarding options</p>
+          <p className="text-gray-500">Select a user to grant access</p>
         </CardContent>
       </Card>
     );
@@ -36,7 +36,7 @@ function OnboardAccessCard({
             <UserPlus className="size-6" />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 text-lg leading-tight">Onboard Access</h3>
+            <h3 className="font-bold text-gray-900 text-lg leading-tight">Grant access</h3>
             <p className="text-xs text-gray-500 font-medium mt-0.5">Grant new permissions</p>
           </div>
         </div>
@@ -80,12 +80,12 @@ function OnboardAccessCard({
                 selectedSet={onboardManualAccess}
                 onToggle={onManualToggle}
                 onActionClick={onOnboardManualClick}
-                actionText="Onboard"
+                actionText="Grant"
                 actionIcon={UserPlus}
                 actionColor="bg-[#10a353] hover:bg-[#0d8c47]"
                 isLoading={isOnboarding}
-                loadingText="Onboarding..."
-                emptyText="No manual permissions to onboard."
+                loadingText="Granting..."
+                emptyText="They already have every manual service."
                 type="onboard"
                 rowKey="service_id"
               />
@@ -98,12 +98,12 @@ function OnboardAccessCard({
                 selectedSet={onboardAutomateAccess}
                 onToggle={onAutomateToggle}
                 onActionClick={onOnboardAutomateClick}
-                actionText="Onboard"
+                actionText="Grant"
                 actionIcon={UserPlus}
                 actionColor="bg-[#10a353] hover:bg-[#0d8c47]"
                 isLoading={isOnboarding}
-                loadingText="Onboarding..."
-                emptyText="No automated permissions to onboard."
+                loadingText="Granting..."
+                emptyText="They already have every automated service."
                 type="onboard"
                 rowKey="service_id"
               />

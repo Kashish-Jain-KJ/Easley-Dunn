@@ -71,7 +71,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
   it("should return 404 if user is not found in the database", async () => {
     const pool = getPool();
     const originalQuery = pool.query;
-    pool.query = jest.fn().mockImplementation((text, params) => {
+    pool.query = jest.fn().mockImplementation((text, _params) => {
       if (text.includes("SELECT service_id FROM services")) {
         return Promise.resolve({ rows: [{ service_id: 10 }] });
       }
@@ -138,7 +138,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
         accessUpdated = true;
         return Promise.resolve({ rows: [] });
       }
-      if (text.includes("INSERT INTO log")) {
+      if (text.includes("INSERT INTO audit_events")) {
         successLogged = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
         return Promise.resolve({ rows: [] });
       }
@@ -212,9 +212,9 @@ describe("POST /appleStoreConnect/users/:userId", () => {
       if (text.includes("SELECT access_id FROM user_service_access")) {
         return Promise.resolve({ rows: [{ access_id: 100 }] });
       }
-      if (text.includes("INSERT INTO log")) {
+      if (text.includes("INSERT INTO audit_events")) {
         failureLogged = params && (params.includes("FAILED") || params[3] === "FAILED");
-        loggedErrorMessage = (params && (params[4] || params[2])) || "";
+        loggedErrorMessage = (params && String(params[7] || "")) || "";
         return Promise.resolve({ rows: [] });
       }
       return Promise.resolve({ rows: [] });
@@ -261,7 +261,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
       if (text.includes("SELECT access_id FROM user_service_access")) {
         return Promise.resolve({ rows: [{ access_id: 100 }] });
       }
-      if (text.includes("INSERT INTO log")) {
+      if (text.includes("INSERT INTO audit_events")) {
         failureLogged = params && (params.includes("FAILED") || params[3] === "FAILED");
         return Promise.resolve({ rows: [] });
       }
@@ -305,7 +305,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
         if (text.includes("SELECT access_id, external_user_identifier FROM user_service_access")) {
           return Promise.resolve({ rows: [] }); // No active access
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           loggedFailure = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }
@@ -328,7 +328,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
 
     it("should successfully remove user from active members when email matches", async () => {
       // Mock search lists and delete API calls
-      global.fetch = jest.fn().mockImplementation((url, options) => {
+      global.fetch = jest.fn().mockImplementation((url, _optionsoptions) => {
         if (url.includes("/v1/users")) {
           return Promise.resolve({
             ok: true,
@@ -373,7 +373,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
           accessUpdated = true;
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           logSuccess = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
@@ -398,7 +398,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
 
     it("should successfully remove user from invitations if not found in active members but matched in invitations", async () => {
       // Mock search lists and delete API calls
-      global.fetch = jest.fn().mockImplementation((url, options) => {
+      global.fetch = jest.fn().mockImplementation((url, _optionsoptions) => {
         if (url.includes("/v1/users")) {
           return Promise.resolve({
             ok: true,
@@ -450,7 +450,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
           accessUpdated = true;
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           logSuccess = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
@@ -474,7 +474,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
     });
 
     it("should return 404 if user is not found in active members or pending invitations on Apple servers", async () => {
-      global.fetch = jest.fn().mockImplementation((url, options) => {
+      global.fetch = jest.fn().mockImplementation((_urlurl, _optionsoptions) => {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -493,7 +493,7 @@ describe("POST /appleStoreConnect/users/:userId", () => {
         if (text.includes("SELECT access_id, external_user_identifier FROM user_service_access")) {
           return Promise.resolve({ rows: [{ access_id: 100, external_user_identifier: "test-apple-user@example.com" }] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           logFailure = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }

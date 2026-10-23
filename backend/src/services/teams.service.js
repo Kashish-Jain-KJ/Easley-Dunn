@@ -185,8 +185,11 @@ async function archiveTeam(teamId, actorUserId) {
         action: "MEMBER_REMOVED",
         targetUserId: member.user_id,
         teamId,
-        detail: { reason: "Team archived", wasLead: member.is_lead },
+        detail: { reason: "Team archived", ...(member.is_lead ? { wasLead: true } : {}) },
       }, db);
+      if (member.is_lead) {
+        await revokeLeadRole(member.user_id, actorUserId, teamId, db);
+      }
     }
     const archived = await teamsRepo.archive(teamId, db);
     await auditRepo.record({ ...audit, teamId, detail: { membersRemoved: removed.length } }, db);
@@ -198,12 +201,6 @@ async function archiveTeam(teamId, actorUserId) {
 
 // Refuses (and audits) if this user can't be made a lead of `team`.
 async function assertCanLead(user, team, audit) {
-  if (user.role !== "LEAD") {
-    return refuse(
-      ApiError.conflict(`${displayName(user)} has role ${user.role}. Change their role to LEAD first.`),
-      audit
-    );
-  }
   const ledTeam = await teamMembersRepo.findLedTeam(user.user_id);
   if (ledTeam && String(ledTeam.team_id) !== String(team.team_id)) {
     return refuse(
@@ -222,7 +219,9 @@ async function addMember(teamId, { userId, isLead = false }, actorUserId) {
   if (!user) {
     return refuse(ApiError.notFound(`User ${userId} not found.`), { ...teamAudit, detail: { userId } });
   }
-  const userAudit = { ...teamAudit, targetUserId: user.user_id, detail: { isLead } };
+  // Only noted when true: a log says what happened, and "added as lead: no" is
+  // the absence of a thing, not an event.
+  const userAudit = { ...teamAudit, targetUserId: user.user_id, detail: isLead ? { isLead: true } : {} };
 
   if (user.is_active === false) {
     return refuse(ApiError.conflict(`${displayName(user)} is inactive and can't join a team.`), userAudit);
@@ -241,6 +240,9 @@ async function addMember(teamId, { userId, isLead = false }, actorUserId) {
     return await withTransaction(async (db) => {
       const member = await teamMembersRepo.add({ teamId, userId, isLead, addedBy: actorUserId }, db);
       await auditRepo.record(userAudit, db);
+      if (isLead) {
+        await grantLeadRole(user, actorUserId, teamId, db);
+      }
       return member;
     });
   } catch (err) {
@@ -282,6 +284,11 @@ async function setLead(teamId, userId, isLead, actorUserId) {
     return await withTransaction(async (db) => {
       const updated = await teamMembersRepo.setLead(teamId, userId, isLead, db);
       await auditRepo.record(userAudit, db);
+      if (isLead) {
+        await grantLeadRole(user, actorUserId, teamId, db);
+      } else {
+        await revokeLeadRole(userId, actorUserId, teamId, db);
+      }
       return updated;
     });
   } catch (err) {
@@ -318,10 +325,48 @@ async function removeMember(teamId, userId, actorUserId) {
       ...audit,
       teamId,
       targetUserId: Number(userId),
-      detail: { wasLead: removed.is_lead },
+      detail: removed.is_lead ? { wasLead: true } : {},
     }, db);
+    if (removed.is_lead) {
+      await revokeLeadRole(userId, actorUserId, teamId, db);
+    }
     return removed;
   });
+}
+
+/**
+ * Gives the LEAD role to someone who has just become a team's lead.
+ * Runs inside the caller's transaction, so the role and the flag move together.
+ */
+async function grantLeadRole(user, actorUserId, teamId, db) {
+  if (user.role === "LEAD") return;
+  await usersRepo.setRole(user.user_id, "LEAD", db);
+  await auditRepo.record({
+    actorUserId,
+    action: "ROLE_CHANGED",
+    targetUserId: user.user_id,
+    teamId,
+    detail: { from: user.role, to: "LEAD", reason: "Became a team lead" },
+  }, db);
+}
+
+/**
+ * Takes the LEAD role back when someone stops leading. A LEAD leads exactly one
+ * team, so once this flag is gone there is nothing left for the role to mean.
+ */
+async function revokeLeadRole(userId, actorUserId, teamId, db) {
+  const user = await usersRepo.findById(userId, db);
+  if (!user || user.role !== "LEAD") return;
+  const stillLeads = await teamMembersRepo.findLedTeam(userId, db);
+  if (stillLeads) return;
+  await usersRepo.setRole(userId, "USER", db);
+  await auditRepo.record({
+    actorUserId,
+    action: "ROLE_CHANGED",
+    targetUserId: Number(userId),
+    teamId,
+    detail: { from: "LEAD", to: "USER", reason: "No longer leads a team" },
+  }, db);
 }
 
 /**

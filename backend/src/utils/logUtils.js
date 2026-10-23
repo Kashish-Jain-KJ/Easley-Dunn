@@ -1,33 +1,58 @@
 /**
  * @file logUtils.js
- * @description Central helper functions for logging system onboarding/offboarding audit activities.
+ * @description Records a service grant or revoke in `audit_events`.
+ *
+ * There is one audit log, not one per feature: a team change, a role change and
+ * a service grant are all "someone changed what a person can reach", and they
+ * carry the same fields. The old `log` table is no longer written to.
  */
 
 "use strict";
 
 const { getPool } = require("../db/database");
+const auditEvents = require("../repositories/auditEvents.repo");
+const logger = require("./logger");
+
+const ACTIONS = {
+  ONBOARD: "SERVICE_GRANTED",
+  OFFBOARD: "SERVICE_REVOKED",
+};
 
 /**
- * Inserts a record into the `log` audit table.
  * @param {Object} params
- * @param {number|string} params.userId
+ * @param {number|string} params.userId          whose access changed
  * @param {number|string|null} [params.serviceId]
- * @param {string} params.commandType - 'ONBOARD' | 'OFFBOARD'
- * @param {string} params.status - 'SUCCESS' | 'FAILED'
+ * @param {string} params.commandType            'ONBOARD' | 'OFFBOARD'
+ * @param {string} params.status                 'SUCCESS' | 'FAILED'
  * @param {string|null} [params.errorMessage]
- * @param {string|null} [params.performedBy]
+ * @param {number|string|null} [params.actorUserId]  who did it
+ * @param {string|null} [params.performedBy]     display name, kept for rows
+ *                                               where the actor is not a user
+ * @param {import("pg").Pool|import("pg").PoolClient} [db]
  */
-async function logActivity({ userId, serviceId = null, commandType, status, errorMessage = null, performedBy = null }) {
+async function logActivity(
+  { userId, serviceId = null, commandType, status, errorMessage = null, actorUserId = null, performedBy = null },
+  db = getPool()
+) {
   try {
-    const pool = getPool();
-    await pool.query(`ALTER TABLE log ADD COLUMN IF NOT EXISTS performed_by VARCHAR(255);`);
-    await pool.query(
-      `INSERT INTO log (user_id, service_id, command_type, status, error_message, performed_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-      [userId, serviceId || null, commandType, status, errorMessage || null, performedBy || null]
+    await auditEvents.record(
+      {
+        actorUserId: actorUserId || null,
+        action: ACTIONS[commandType] || `SERVICE_${commandType}`,
+        outcome: status === "SUCCESS" ? "SUCCESS" : "FAILED",
+        targetUserId: userId || null,
+        serviceId: serviceId || null,
+        detail: {
+          ...(errorMessage ? { reason: errorMessage } : {}),
+          ...(performedBy && !actorUserId ? { performedBy } : {}),
+        },
+      },
+      db
     );
   } catch (err) {
-    console.error("Failed to insert audit log entry:", err.message);
+    // A failed audit write must not swallow the action's own error, but it is
+    // worth shouting about: it means a change happened with no record.
+    logger.error(`[audit] Could not record ${commandType} for user ${userId}: ${err.message}`);
   }
 }
 

@@ -9,7 +9,7 @@ const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
 const requireAuth = require("../middlewares/requireAuth.middleware");
 const requireRole = require("../middlewares/requireRole.middleware");
-const { grantRole, revokeRole, getRoleUsers, toggleUserStatus } = require("../controllers/roles.controller");
+const { grantRole, toggleUserStatus } = require("../controllers/roles.controller");
 
 const router = Router();
 
@@ -77,42 +77,6 @@ const router = Router();
  */
 router.post("/grant", requireAuth, requireRole("ADMIN"), asyncHandler(grantRole));
 
-/**
- * @swagger
- * /admin/roles/{userId}:
- *   delete:
- *     summary: Reset a user's role to USER
- *     description: Sets the role to USER and ends the user's sessions. Login is kept; to withdraw login, deactivate the user.
- *     tags: [Roles & Permissions]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: integer
- *         description: User ID to revoke role from
- *     responses:
- *       200:
- *         description: Role revoked successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 message: { type: string, example: "Role for lead@easleydunn.com reset to 'USER'." }
- *       400:
- *         description: Self-revocation blocked
- *       401:
- *         description: Not authenticated
- *       403:
- *         description: Caller is not ADMIN, or target is an ADMIN account
- *       404:
- *         description: User not found
- */
-router.delete("/:userId", requireAuth, requireRole("ADMIN"), asyncHandler(revokeRole));
 
 /**
  * @swagger
@@ -157,43 +121,6 @@ router.delete("/:userId", requireAuth, requireRole("ADMIN"), asyncHandler(revoke
  */
 router.patch("/:userId/status", requireAuth, requireRole("ADMIN"), asyncHandler(toggleUserStatus));
 
-/**
- * @swagger
- * /admin/roles/users:
- *   get:
- *     summary: List all users and their Cerberus console roles
- *     description: Returns registered users with console roles, active status, login history, and credential flags.
- *     tags: [Roles & Permissions]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: User list returned.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 count: { type: integer, example: 10 }
- *                 users:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       userId: { type: integer, example: 1 }
- *                       name: { type: string, example: "John Doe" }
- *                       email: { type: string, example: "john@easleydunn.com" }
- *                       role: { type: string, example: "ADMIN" }
- *                       isActive: { type: boolean, example: true }
- *                       hasPassword: { type: boolean, example: true }
- *                       lastLoginAt: { type: string, nullable: true }
- *       401:
- *         description: Not authenticated
- *       403:
- *         description: Insufficient permission
- */
-router.get("/users", requireAuth, requireRole("ADMIN"), asyncHandler(getRoleUsers));
 
 module.exports = router;
 

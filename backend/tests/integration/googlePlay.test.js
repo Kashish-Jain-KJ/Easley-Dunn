@@ -80,7 +80,7 @@ describe("POST /google-play/users/:userId", () => {
   it("should return 404 if user is not found in the database", async () => {
     const pool = getPool();
     const originalQuery = pool.query;
-    pool.query = jest.fn().mockImplementation((text, params) => {
+    pool.query = jest.fn().mockImplementation((text, _params) => {
       if (text.includes("SELECT service_id FROM services")) {
         return Promise.resolve({ rows: [{ service_id: 1 }] });
       }
@@ -114,7 +114,7 @@ describe("POST /google-play/users/:userId", () => {
     // Mock DB queries so that we don't depend on actual DB records
     const pool = getPool();
     const originalQuery = pool.query;
-    pool.query = jest.fn().mockImplementation((text, params) => {
+    pool.query = jest.fn().mockImplementation((text, _params) => {
       if (text.includes("SELECT service_id FROM services")) {
         return Promise.resolve({ rows: [{ service_id: 1 }] });
       }
@@ -127,7 +127,7 @@ describe("POST /google-play/users/:userId", () => {
       if (text.includes("INSERT INTO user_service_access")) {
         return Promise.resolve({ rows: [] });
       }
-      if (text.includes("INSERT INTO log")) {
+      if (text.includes("INSERT INTO audit_events")) {
         return Promise.resolve({ rows: [] });
       }
       return Promise.resolve({ rows: [] });
@@ -175,14 +175,14 @@ describe("POST /google-play/users/:userId", () => {
     const originalQuery = pool.query;
     let loggedFailure = false;
 
-    pool.query = jest.fn().mockImplementation((text, params) => {
+    pool.query = jest.fn().mockImplementation((text, _params) => {
       if (text.includes("SELECT service_id FROM services")) {
         return Promise.resolve({ rows: [{ service_id: 1 }] });
       }
       if (text.includes("SELECT email FROM users")) {
         return Promise.resolve({ rows: [{ email: "test-play-user@example.com" }] });
       }
-      if (text.includes("INSERT INTO log")) {
+      if (text.includes("INSERT INTO audit_events")) {
         loggedFailure = true;
         return Promise.resolve({ rows: [] });
       }

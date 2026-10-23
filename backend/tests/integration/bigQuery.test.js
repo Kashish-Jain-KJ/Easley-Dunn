@@ -66,14 +66,14 @@ describe("BigQuery Endpoints", () => {
     it("should return 404 if user is not found in the database", async () => {
       const pool = getPool();
       const originalQuery = pool.query;
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services")) {
           return Promise.resolve({ rows: [{ service_id: 3 }] });
         }
         if (text.includes("SELECT email FROM users")) {
           return Promise.resolve({ rows: [] }); // User not found
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -111,7 +111,7 @@ describe("BigQuery Endpoints", () => {
       let updatedDb = false;
       let loggedSuccess = false;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services")) {
           return Promise.resolve({ rows: [{ service_id: 3 }] });
         }
@@ -132,7 +132,7 @@ describe("BigQuery Endpoints", () => {
           updatedDb = true;
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           loggedSuccess = true;
           return Promise.resolve({ rows: [] });
         }
@@ -180,14 +180,14 @@ describe("BigQuery Endpoints", () => {
     it("should return 404 if BigQuery access record is not found", async () => {
       const pool = getPool();
       const originalQuery = pool.query;
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services")) {
           return Promise.resolve({ rows: [{ service_id: 3 }] });
         }
         if (text.includes("SELECT usa.external_account_identifier")) {
           return Promise.resolve({ rows: [] }); // Not found
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -224,7 +224,7 @@ describe("BigQuery Endpoints", () => {
       let updatedDb = false;
       let loggedSuccess = false;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services")) {
           return Promise.resolve({ rows: [{ service_id: 3 }] });
         }
@@ -244,7 +244,7 @@ describe("BigQuery Endpoints", () => {
           updatedDb = true;
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           loggedSuccess = true;
           return Promise.resolve({ rows: [] });
         }

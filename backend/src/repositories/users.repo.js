@@ -18,4 +18,9 @@ async function findById(userId, db = getPool()) {
   return rows[0] || null;
 }
 
-module.exports = { findById };
+/** The only place a role is written outside the roles controller. */
+async function setRole(userId, role, db = getPool()) {
+  await db.query(`UPDATE users SET "Role" = $2 WHERE user_id = $1`, [userId, role]);
+}
+
+module.exports = { findById, setRole };

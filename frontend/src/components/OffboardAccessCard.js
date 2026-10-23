@@ -22,7 +22,7 @@ function OffboardAccessCard({
       <Card className="h-full flex items-center justify-center border-dashed border-2 min-h-[300px]">
         <CardContent className="text-center py-12">
           <UserMinus className="size-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">Select a user to view offboarding options</p>
+          <p className="text-gray-500">Select a user to revoke access</p>
         </CardContent>
       </Card>
     );
@@ -39,7 +39,7 @@ function OffboardAccessCard({
             <UserMinus className="size-6" />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 text-lg leading-tight">Offboard Access</h3>
+            <h3 className="font-bold text-gray-900 text-lg leading-tight">Revoke access</h3>
             <p className="text-xs text-gray-500 font-medium mt-0.5">Revoke existing permissions</p>
           </div>
         </div>
@@ -83,11 +83,11 @@ function OffboardAccessCard({
                 selectedSet={manualAccess}
                 onToggle={onManualToggle}
                 onActionClick={onOffboardManualClick}
-                actionText="Offboard"
+                actionText="Revoke"
                 actionIcon={UserMinus}
                 actionColor="bg-[#d91e36] hover:bg-[#c0152b]"
                 isLoading={isOffboarding}
-                loadingText="Offboarding..."
+                loadingText="Revoking..."
                 emptyText="No active manual permissions found."
                 type="offboard"
                 rowKey="access_id"
@@ -101,11 +101,11 @@ function OffboardAccessCard({
                 selectedSet={automateAccess}
                 onToggle={onAutomateToggle}
                 onActionClick={onOffboardAutomateClick}
-                actionText="Offboard"
+                actionText="Revoke"
                 actionIcon={UserMinus}
                 actionColor="bg-[#d91e36] hover:bg-[#c0152b]"
                 isLoading={isOffboarding}
-                loadingText="Offboarding..."
+                loadingText="Revoking..."
                 emptyText="No active automated permissions found."
                 type="offboard"
                 rowKey="access_id"

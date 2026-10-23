@@ -8,7 +8,6 @@
 
 "use strict";
 
-const ApiError = require("../utils/ApiError");
 const logger = require("../utils/logger");
 
 /**

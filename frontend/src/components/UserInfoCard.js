@@ -1,9 +1,18 @@
 import React, { memo } from "react";
-import { Mail } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Mail, Users2 } from "lucide-react";
 import { Card } from "./ui/card";
 import { getAvatarColor, getInitials } from "../utils/helpers";
 
-function UserInfoCard({ selectedUser }) {
+/**
+ * @param {Object} props
+ * @param {Object} props.selectedUser
+ * @param {Array<{team_id: number, name: string, isLead: boolean}>} [props.teams]
+ *        the teams they belong to, shown here because "who is this person"
+ *        includes who they work with — it was previously only findable by
+ *        opening the Teams section and reading every team's members.
+ */
+function UserInfoCard({ selectedUser, teams = [] }) {
   if (!selectedUser) return null;
 
   return (
@@ -69,6 +78,30 @@ function UserInfoCard({ selectedUser }) {
           <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
             <Mail className="size-4 text-gray-400 flex-shrink-0" />
             <span className="truncate">{selectedUser.email}</span>
+          </div>
+
+          <div className="flex items-center gap-x-2 gap-y-1 text-sm text-gray-600 mt-1.5 flex-wrap">
+            <Users2 className="size-4 text-gray-400 flex-shrink-0" />
+            {teams.length === 0 ? (
+              <span className="text-gray-400">Not on a team</span>
+            ) : (
+              teams.map((team, i) => (
+                <span key={team.team_id} className="inline-flex items-center">
+                  <Link
+                    to={`/teams/${team.team_id}`}
+                    className="text-gray-700 no-underline hover:underline"
+                  >
+                    {team.name}
+                  </Link>
+                  {team.isLead && (
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold">
+                      Lead
+                    </span>
+                  )}
+                  {i < teams.length - 1 && <span className="text-gray-300 ml-2">·</span>}
+                </span>
+              ))
+            )}
           </div>
         </div>
       </div>

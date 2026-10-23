@@ -17,8 +17,6 @@
 const { getPool } = require("../db/database");
 const { logActivity } = require("../utils/logUtils");
 const { GoogleAuth } = require("google-auth-library");
-const path = require("path");
-const fs = require("fs");
 
 const GA_SCOPES = [
   "https://www.googleapis.com/auth/analytics.manage.users",
@@ -240,7 +238,7 @@ async function addGoogleAnalyticsUser(req, res) {
 
       if (userRows.length === 0) {
         await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: `User not found with user_id '${userId}'.`,
-        performedBy: req.user?.name || req.user?.email || "System",
+        performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null,
       });
         return res.status(404).json({
           success: false,
@@ -270,7 +268,7 @@ async function addGoogleAnalyticsUser(req, res) {
 
       if (!external_account_identifier) {
         const errMessage = "Missing external_account_identifier. (Code: 400)";
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
         results.push({ access_id, status: "failed", error: errMessage });
         continue;
       }
@@ -310,7 +308,7 @@ async function addGoogleAnalyticsUser(req, res) {
           [bindingName, access_id]
         );
 
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
         results.push({ access_id, parentResource: external_account_identifier, bindingName, status: "onboarded" });
       } catch (error) {
@@ -318,7 +316,7 @@ async function addGoogleAnalyticsUser(req, res) {
         const errCode = error.code || error.status || "500";
         const errMessage = `${error.message} (Code: ${errCode})`;
 
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
         results.push({ access_id, status: "failed", error: errMessage });
       }
@@ -355,7 +353,7 @@ async function addGoogleAnalyticsUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
     return res.status(500).json({
       success: false,
@@ -402,7 +400,7 @@ async function removeGoogleAnalyticsUser(req, res) {
       }
 
       await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `Active Google Analytics access record not found for user_id '${userId}'. (Code: 404)`,
-        performedBy: req.user?.name || req.user?.email || "System",
+        performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null,
       });
 
       return res.status(404).json({
@@ -415,7 +413,7 @@ async function removeGoogleAnalyticsUser(req, res) {
     serviceIdVal = service_id;
 
     if (!external_account_identifier) {
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: "Missing external_account_identifier. (Code: 400)" , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: "Missing external_account_identifier. (Code: 400)" , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
       return res.status(400).json({
         success: false,
@@ -442,7 +440,7 @@ async function removeGoogleAnalyticsUser(req, res) {
       [access_id]
     );
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
     return res.json({
       success: true,
@@ -468,7 +466,7 @@ async function removeGoogleAnalyticsUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
     return res.status(500).json({
       success: false,

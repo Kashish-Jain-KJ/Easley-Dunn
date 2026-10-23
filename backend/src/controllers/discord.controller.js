@@ -205,7 +205,7 @@ async function onboardDiscordUser(req, res) {
 
   if (!localUser) {
     await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: `User not found with user_id '${userId}'.`,
-        performedBy: req.user?.name || req.user?.email || "System",
+        performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null,
       });
     return res.status(404).json({ success: false, message: `User not found with user_id '${userId}'.` });
   }
@@ -214,7 +214,7 @@ async function onboardDiscordUser(req, res) {
 
   if (accessRows.length === 0) {
     const errMessage = `No inactive Discord access records found for user_id '${userId}', and DISCORD_GUILD_ID is not configured as a fallback.`;
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
     return res.status(404).json({ success: false, message: errMessage });
   }
 
@@ -225,7 +225,7 @@ async function onboardDiscordUser(req, res) {
 
     if (!guildId) {
       const errMessage = "Missing Discord guild ID (external_account_identifier). (Code: 400)";
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
       results.push({ access_id, status: "failed", error: "Missing Discord guild ID" });
       continue;
     }
@@ -255,7 +255,7 @@ async function onboardDiscordUser(req, res) {
         [access_id]
       );
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
       console.log(`[Discord] Successfully generated an invite for ${localUser.email} to guild ${guildId}.`);
       results.push({ access_id, guild: guildId, inviteUrl, emailSent, status: "onboarded" });
@@ -264,7 +264,7 @@ async function onboardDiscordUser(req, res) {
       const errCode = error.code || error.status || "500";
       const errMessage = `${error.message} (Code: ${errCode})`;
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
       results.push({ access_id, guild: guildId, status: "failed", error: errMessage });
     }
@@ -311,7 +311,7 @@ async function removeDiscordUser(req, res) {
 
   if (accessRows.length === 0) {
     await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `No active Discord access record found for user_id '${userId}'. (Code: 404)`,
-        performedBy: req.user?.name || req.user?.email || "System",
+        performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null,
       });
     return res.status(404).json({
       success: false,
@@ -326,7 +326,7 @@ async function removeDiscordUser(req, res) {
 
     if (!guildId || !discordUserId) {
       const errMessage = "Missing Discord guild ID (external_account_identifier) or Discord user ID (external_user_identifier) in the database. (Code: 400)";
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
       results.push({ access_id, status: "failed", error: "Missing Discord guild ID or Discord user ID" });
       continue;
     }
@@ -339,7 +339,7 @@ async function removeDiscordUser(req, res) {
         [access_id]
       );
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
       console.log(`[Discord] Successfully kicked ${discordUserId} from guild ${guildId}.`);
       results.push({ access_id, guild: guildId, status: "kicked" });
@@ -348,7 +348,7 @@ async function removeDiscordUser(req, res) {
       const errCode = error.code || error.status || "500";
       const errMessage = `${error.message} (Code: ${errCode})`;
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
       results.push({ access_id, guild: guildId, status: "failed", error: errMessage });
     }
@@ -601,7 +601,7 @@ async function confirmDiscordUsername(req, res) {
       [discordUserId, access_id]
     );
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
     console.log(`[Discord] Linked username '${username}' to user ID ${discordUserId} for user_id '${userId}'.`);
 
@@ -619,7 +619,7 @@ async function confirmDiscordUsername(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System" });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage , performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null });
 
     if (isFormSubmit) {
       return res.status(500).type("html").send(confirmErrorPage({ userId, message: errMessage }));

@@ -9,7 +9,6 @@ require("dotenv").config();
 
 const request = require("supertest");
 const app = require("../../src/app");
-const { getPool } = require("../../src/db/database");
 
 // Stub the session lookup — these tests exercise route wiring and controller
 // behaviour, not authentication. See tests/helpers/authMock.js.

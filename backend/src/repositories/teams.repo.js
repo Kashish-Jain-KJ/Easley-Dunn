@@ -23,7 +23,9 @@ async function findActiveByName(name, db = getPool()) {
   return rows[0] || null;
 }
 
-// Every team with its member count and leads, active teams first.
+// Every team with its member count, its leads and its members, active first.
+// Members come back here so a screen showing every team does not have to ask
+// per team (the organization map used to make one request per team).
 async function listWithSummary(db = getPool()) {
   const { rows } = await db.query(
     `SELECT t.team_id, t.name, t.description, t.is_active, t.created_at,
@@ -33,7 +35,16 @@ async function listWithSummary(db = getPool()) {
                                          'name', btrim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, ''))))
                 FILTER (WHERE m.is_lead),
               '[]'
-            ) AS leads
+            ) AS leads,
+            coalesce(
+              json_agg(json_build_object('user_id', u.user_id, 'email', u.email,
+                                         'first_name', u.first_name, 'last_name', u.last_name,
+                                         'is_active', u.is_active, 'is_lead', m.is_lead,
+                                         'added_at', m.added_at)
+                       ORDER BY m.is_lead DESC, lower(u.email))
+                FILTER (WHERE m.user_id IS NOT NULL),
+              '[]'
+            ) AS members
        FROM teams t
        LEFT JOIN team_members m ON m.team_id = t.team_id
        LEFT JOIN users u ON u.user_id = m.user_id

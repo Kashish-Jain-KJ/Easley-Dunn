@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { ShieldCheck, Mail, Lock, Eye, EyeOff, AlertCircle, RefreshCw } from "lucide-react";
+import { ShieldCheck, Mail, Lock, Eye, EyeOff, AlertCircle, RefreshCw, MailCheck, ArrowLeft } from "lucide-react";
+
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
 
 export default function LoginPage() {
   const { login, error, setError, sessionExpired } = useAuth();
@@ -8,6 +10,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Asking for a reset is a step on this page, not a destination: the address
+  // already typed carries over, and there is nowhere else to go afterwards.
+  const [forgot, setForgot] = useState(false);
+  const [sent, setSent] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,6 +27,36 @@ export default function LoginPage() {
     if (!result.success) {
       // Error handled by AuthContext
     }
+  };
+
+  const requestReset = async (e) => {
+    e.preventDefault();
+    if (!email) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      // The server answers the same way whether or not the address has an
+      // account, so this is shown as-is: second-guessing it here would give
+      // away exactly what the endpoint is careful not to.
+      if (!res.ok) throw new Error(data.message || "Could not send a reset link.");
+      setSent(data.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const backToSignIn = () => {
+    setForgot(false);
+    setSent("");
+    setError(null);
   };
 
   return (
@@ -71,7 +107,31 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {sent ? (
+            <div className="space-y-5">
+              <div className="rounded-lg bg-blue-50 p-4 border border-blue-200">
+                <div className="flex">
+                  <MailCheck className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                  <div className="ml-3 text-sm text-blue-900">{sent}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={backToSignIn}
+                className="w-full py-2.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to sign in
+              </button>
+            </div>
+          ) : (
+          <form onSubmit={forgot ? requestReset : handleSubmit} className="space-y-5">
+            {forgot && (
+              <p className="m-0 text-sm text-slate-600">
+                Enter your email address and we&apos;ll send you a link to choose a new password.
+                The link lasts an hour.
+              </p>
+            )}
             <div>
               <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
                 Email Address
@@ -89,14 +149,23 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                Password
-              </label>
+            <div className={forgot ? "hidden" : ""}>
+              <div className="flex items-baseline justify-between mb-1">
+                <label className="block text-xs font-semibold uppercase text-slate-600">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setForgot(true); setError(null); }}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700 cursor-pointer bg-transparent border-0 p-0"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  required
+                  required={!forgot}
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -115,16 +184,30 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isSubmitting || !email || !password}
+              disabled={isSubmitting || !email || (!forgot && !password)}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium text-sm rounded-lg shadow-sm shadow-blue-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               {isSubmitting ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : forgot ? (
+                "Send reset link"
               ) : (
                 "Sign In to Cerberus"
               )}
             </button>
+
+            {forgot && (
+              <button
+                type="button"
+                onClick={backToSignIn}
+                className="w-full py-2.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to sign in
+              </button>
+            )}
           </form>
+          )}
         </div>
       </div>
     </div>

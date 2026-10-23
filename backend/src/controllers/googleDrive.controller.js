@@ -57,6 +57,7 @@ async function getDriveServiceId() {
 async function onboardGoogleDriveUser(req, res) {
   const { userId } = req.params;
   const performedBy = req.user?.name || req.user?.email || "System";
+  const actorUserId = req.user?.userId ?? null;
 
   let serviceIdVal = null;
   try {
@@ -84,7 +85,7 @@ async function onboardGoogleDriveUser(req, res) {
 
       if (userRows.length === 0) {
         const errMessage = `User not found with user_id '${userId}'.`;
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy, actorUserId });
         return res.status(404).json({ success: false, message: errMessage });
       }
 
@@ -117,7 +118,7 @@ async function onboardGoogleDriveUser(req, res) {
 
       if (!folderId || !email) {
         const errMessage = "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)";
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy, actorUserId });
         results.push({ access_id, status: "failed", error: "Missing Folder ID or Email" });
         continue;
       }
@@ -140,7 +141,7 @@ async function onboardGoogleDriveUser(req, res) {
           [access_id]
         );
 
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS", performedBy });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "SUCCESS", performedBy, actorUserId });
 
         console.log(`[GoogleDrive] Successfully added ${email} to folder ${folderId} with role ${TARGET_ROLE}.`);
         results.push({ access_id, folderId, email, role: TARGET_ROLE, status: "onboarded" });
@@ -149,7 +150,7 @@ async function onboardGoogleDriveUser(req, res) {
         const errCode = error.code || error.status || "500";
         const errMessage = `${error.message} (Code: ${errCode})`;
 
-        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+        await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy, actorUserId });
 
         results.push({ access_id, folderId, email, status: "failed", error: errMessage });
       }
@@ -183,7 +184,7 @@ async function onboardGoogleDriveUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "ONBOARD", status: "FAILED", errorMessage: errMessage, performedBy, actorUserId });
 
     res.status(500).json({
       success: false,
@@ -201,6 +202,7 @@ async function onboardGoogleDriveUser(req, res) {
 async function offboardGoogleDriveUser(req, res) {
   const { userId } = req.params;
   const performedBy = req.user?.name || req.user?.email || "System";
+  const actorUserId = req.user?.userId ?? null;
 
   let serviceIdVal = null;
   try {
@@ -218,7 +220,7 @@ async function offboardGoogleDriveUser(req, res) {
       serviceIdVal = await getDriveServiceId();
       const errMessage = `Google Drive access record not found for user_id '${userId}'.`;
 
-      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `${errMessage} (Code: 404)`, performedBy });
+      await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: `${errMessage} (Code: 404)`, performedBy, actorUserId });
 
       return res.status(404).json({ success: false, message: errMessage });
     }
@@ -234,6 +236,7 @@ async function offboardGoogleDriveUser(req, res) {
         status: "FAILED",
         errorMessage: "Missing external_account_identifier or external_user_identifier in the database. (Code: 400)",
         performedBy,
+        actorUserId,
       });
 
       return res.status(400).json({
@@ -255,6 +258,7 @@ async function offboardGoogleDriveUser(req, res) {
         status: "FAILED",
         errorMessage: `Cannot offboard user. ${ownedFiles.length} file(s) are still owned by ${userEmail}. (Code: 409)`,
         performedBy,
+        actorUserId,
       });
 
       return res.status(409).json({
@@ -298,6 +302,7 @@ async function offboardGoogleDriveUser(req, res) {
         status: "SUCCESS",
         errorMessage: `Already removed: no permission for ${userEmail} on folder '${folderId}'. Marked inactive.`,
         performedBy,
+        actorUserId,
       });
 
       return res.json({
@@ -306,7 +311,7 @@ async function offboardGoogleDriveUser(req, res) {
       });
     }
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS", performedBy });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS", performedBy, actorUserId });
 
     console.log(`[GoogleDrive] Successfully removed ${userEmail} from folder ${folderId}.`);
 
@@ -328,7 +333,7 @@ async function offboardGoogleDriveUser(req, res) {
     const errCode = error.code || error.status || "500";
     const errMessage = `${error.message} (Code: ${errCode})`;
 
-    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage, performedBy });
+    await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "FAILED", errorMessage: errMessage, performedBy, actorUserId });
 
     res.status(500).json({
       success: false,

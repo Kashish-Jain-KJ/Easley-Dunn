@@ -147,82 +147,6 @@ async function grantRole(req, res) {
 }
 
 /**
- * DELETE /admin/roles/:userId
- * Resets a user's role to USER. Login is kept (every role can log in);
- * withdrawing login is deactivation (PATCH /admin/roles/:userId/status).
- */
-async function revokeRole(req, res) {
-  const { userId } = req.params;
-  const callerUserId = req.user.userId;
-
-  if (String(callerUserId) === String(userId)) {
-    throw ApiError.badRequest("You cannot revoke your own active Cerberus role.");
-  }
-
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT user_id, email, "Role" FROM users WHERE user_id = $1`,
-    [userId]
-  );
-
-  if (rows.length === 0) {
-    throw ApiError.notFound("User not found.");
-  }
-
-  const targetUser = rows[0];
-  const targetRole = String(targetUser.Role || "NONE").toUpperCase();
-
-  if (targetRole === "ADMIN") {
-    throw ApiError.forbidden("Admin accounts cannot be edited through the API.");
-  }
-
-  await updateRole(
-    `UPDATE users SET "Role" = 'USER' WHERE user_id = $1`,
-    [userId],
-    { userId, fromRole: targetRole, toRole: "USER", actorUserId: callerUserId }
-  );
-
-  // A privilege change must not be inherited by a session that predates it.
-  await revokeAllForUser(userId);
-
-  res.json({
-    success: true,
-    message: `Role for ${targetUser.email} reset to 'USER'.`,
-  });
-}
-
-/**
- * GET /admin/roles/users
- * Returns list of all users and their assigned roles.
- */
-async function getRoleUsers(req, res) {
-  const pool = getPool();
-
-  const { rows } = await pool.query(
-    `SELECT user_id, first_name, last_name, email, is_active, "Role", last_login_at, password_hash
-     FROM users
-     ORDER BY user_id ASC`
-  );
-
-  const users = rows.map((u) => ({
-    userId: u.user_id,
-    name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email,
-    email: u.email,
-    // Shown as stored; legacy values (MEMBER etc.) remain until the roles migration.
-    role: u.Role ? String(u.Role).toUpperCase() : "NONE",
-    isActive: u.is_active,
-    hasPassword: !!u.password_hash,
-    lastLoginAt: u.last_login_at,
-  }));
-
-  res.json({
-    success: true,
-    count: users.length,
-    users,
-  });
-}
-
-/**
  * PATCH /admin/roles/:userId/status
  * Toggles a user's active/inactive status (is_active boolean).
  */
@@ -298,7 +222,5 @@ async function toggleUserStatus(req, res) {
 
 module.exports = {
   grantRole,
-  revokeRole,
-  getRoleUsers,
   toggleUserStatus,
 };
