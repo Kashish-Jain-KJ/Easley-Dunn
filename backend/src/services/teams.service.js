@@ -340,6 +340,12 @@ async function removeMember(teamId, userId, actorUserId) {
  */
 async function grantLeadRole(user, actorUserId, teamId, db) {
   if (user.role === "LEAD") return;
+  // An admin keeps ADMIN. The role says what someone is; the membership flag
+  // says which team they lead, and ADMIN already outranks LEAD everywhere
+  // requireRole looks. Without this, an account promoted to admin in the
+  // database would be written back down to LEAD the next time its lead flag
+  // was touched, and then to USER when it was cleared.
+  if (user.role === "ADMIN") return;
   await usersRepo.setRole(user.user_id, "LEAD", db);
   await auditRepo.record({
     actorUserId,
