@@ -260,11 +260,20 @@ async function removeFirebaseUser(req, res) {
 
     await auth.deleteUser(firebaseUid);
 
+    // Reset external_user_identifier back to the user's email instead of
+    // leaving the deleted account's UID behind — otherwise re-onboarding
+    // passes that UID to getUserByEmail and fails with auth/invalid-email.
+    const { rows: userRows } = await getPool().query(
+      "SELECT email FROM users WHERE user_id = $1",
+      [userId]
+    );
+    const userEmail = userRows[0]?.email || null;
+
     await getPool().query(
       `UPDATE user_service_access
-       SET is_active = false
-       WHERE user_id = $1 AND service_id = $2`,
-      [userId, serviceIdVal]
+       SET is_active = false, external_user_identifier = $1
+       WHERE user_id = $2 AND service_id = $3`,
+      [userEmail, userId, serviceIdVal]
     );
 
     await logActivity({ userId, serviceId: serviceIdVal, commandType: "OFFBOARD", status: "SUCCESS" , performedBy: req.user?.name || req.user?.email || "System" });
