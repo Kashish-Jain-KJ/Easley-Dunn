@@ -33,6 +33,18 @@ app.set("trust proxy", 1);
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet());
 
+// Nothing this API returns may be kept by the browser. Without an explicit
+// rule a browser may cache a response on its own, and a back-navigation
+// repaints what it already holds rather than asking again — so data fetched
+// for one session can reappear on screen after that session has ended, with
+// the server never getting the chance to refuse it. On a shared machine that
+// is the next person reading the last person's console. helmet does not set
+// this (it dropped its no-cache default in v4), so it is set here.
+app.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(
   cors({
@@ -44,6 +56,37 @@ app.use(
 );
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
+// Three budgets, all per IP. Guessing passwords is the attack worth throttling
+// hard; an admin clicking around the console is not, and a single limit low
+// enough for the first locks the second out.
+app.use(
+  "/auth/login",
+  rateLimit({
+    windowMs: appConfig.loginRateLimitWindowMs,
+    max: appConfig.loginRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: { success: false, message: "Too many sign-in attempts, please try again later." },
+  })
+);
+
+// Asking for a reset link is unauthenticated and sends an email to an address
+// the caller chose, so it is both a way to spam someone else's mailbox and the
+// slowest part of the request. Successful calls are counted, unlike sign-in:
+// here "successful" says nothing about whether the address was real, so there
+// is nothing to reward.
+app.use(
+  "/auth/forgot-password",
+  rateLimit({
+    windowMs: appConfig.loginRateLimitWindowMs,
+    max: appConfig.loginRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: "Too many reset requests, please try again later." },
+  })
+);
+
 app.use(
   rateLimit({
     windowMs: appConfig.rateLimitWindowMs,

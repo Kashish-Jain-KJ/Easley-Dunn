@@ -47,7 +47,11 @@ const appConfig = {
 
   // Rate limiting
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000, // 15 min
-  rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+  rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX, 10) || 1000,
+  // Sign-in attempts get their own, much smaller budget: that is the limit
+  // worth keeping tight, and it must not be spent by the console's own calls.
+  loginRateLimitWindowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
+  loginRateLimitMax: parseInt(process.env.LOGIN_RATE_LIMIT_MAX, 10) || 10,
 
   // Logging
   logLevel: process.env.LOG_LEVEL || "info",

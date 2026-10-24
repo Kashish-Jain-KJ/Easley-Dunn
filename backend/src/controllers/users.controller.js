@@ -10,6 +10,10 @@
 "use strict";
 
 const { getPool } = require("../db/database");
+const auditEvents = require("../repositories/auditEvents.repo");
+const teamsService = require("../services/teams.service");
+const { sendInvite } = require("../services/accountEmail.service");
+const { verifyMail } = require("../utils/mail");
 const ApiError = require("../utils/ApiError");
 const { splitName } = require("../utils/userUtils");
 const { logActivity } = require("../utils/logUtils");
@@ -19,8 +23,13 @@ const { logActivity } = require("../utils/logUtils");
  * Returns every row in the `users` table.
  */
 async function getUsers(_req, res) {
+  // Named columns, never `SELECT *`: that shipped every password hash to the
+  // browser on each page load.
   const { rows } = await getPool().query(
-    "SELECT *, first_name || ' ' || last_name AS name FROM easleydunn.users ORDER BY user_id ASC"
+    `SELECT user_id, email, first_name, last_name, "Role", is_active, start_date, last_login_at,
+            (password_hash IS NOT NULL) AS has_password
+       FROM users
+      ORDER BY user_id ASC`
   );
 
   res.json({
@@ -40,7 +49,7 @@ async function getUsers(_req, res) {
  * Body: { first_name, last_name, email }
  */
 async function createSystemUser(req, res) {
-  const { first_name, last_name, email } = req.body;
+  const { first_name, last_name, email, teamId } = req.body;
 
   if (!email || typeof email !== "string") {
     throw ApiError.badRequest("Email is required.");
@@ -50,12 +59,12 @@ async function createSystemUser(req, res) {
   const pool = getPool();
 
   const { rows: existing } = await pool.query(
-    "SELECT user_id FROM easleydunn.users WHERE LOWER(email) = $1",
+    "SELECT user_id FROM users WHERE LOWER(email) = $1",
     [normalizedEmail]
   );
 
   if (existing.length > 0) {
-    throw ApiError.badRequest(`A system user with email '${normalizedEmail}' is already registered.`);
+    throw ApiError.badRequest(`Someone with the email '${normalizedEmail}' is already here.`);
   }
 
   let finalFirstName = first_name || "";
@@ -67,9 +76,11 @@ async function createSystemUser(req, res) {
     finalLastName = split.last_name;
   }
 
+  // No password is set here. The invite below is what lets them choose one,
+  // so a password never exists in anyone's mailbox.
   const { rows } = await pool.query(
-    `INSERT INTO easleydunn.users (first_name, last_name, email, is_active, start_date, "Role")
-     VALUES ($1, $2, $3, true, CURRENT_DATE, 'MEMBER')
+    `INSERT INTO users (first_name, last_name, email, is_active, start_date, "Role")
+     VALUES ($1, $2, $3, true, CURRENT_DATE, 'USER')
      RETURNING user_id, first_name, last_name, email, is_active, start_date, "Role"`,
     [finalFirstName, finalLastName, normalizedEmail]
   );
@@ -77,13 +88,44 @@ async function createSystemUser(req, res) {
   const newUser = rows[0];
   const formattedName = `${newUser.first_name || ""} ${newUser.last_name || ""}`.trim() || newUser.email;
 
+  await auditEvents.record({
+    actorUserId: req.user?.userId || null,
+    action: "PERSON_ADDED",
+    targetUserId: newUser.user_id,
+    detail: { email: normalizedEmail },
+  });
+
+  // Joining a team goes through the teams service so it is checked and audited
+  // the same way as adding someone from the team's own page.
+  let teamName = null;
+  let teamError = null;
+  if (teamId) {
+    try {
+      const team = await teamsService.addMember(teamId, { userId: newUser.user_id }, req.user?.userId);
+      teamName = (await teamsService.getTeam(team.team_id)).name;
+    } catch (err) {
+      teamError = err.message;
+    }
+  }
+
+  const invite = await sendInvite({ user: newUser, teamName, actorUserId: req.user?.userId });
+
   res.status(201).json({
     success: true,
-    message: `Registered system user '${formattedName}' (${newUser.email}) successfully.`,
+    message: invite.sent
+      ? `${formattedName} added. An invite has been emailed to ${newUser.email}.`
+      : `${formattedName} added, but the invite email could not be sent.`,
+    inviteSent: invite.sent,
+    // Returned so the admin can pass the link on by hand when mail is not set
+    // up yet; it is the same one-time link that was emailed.
+    inviteLink: invite.sent ? null : invite.link,
+    inviteError: invite.error || null,
+    teamError,
     data: {
       ...newUser,
       id: newUser.user_id,
       name: formattedName,
+      team: teamName,
     },
   });
 }
@@ -167,7 +209,7 @@ async function onboardUserAccess(req, res) {
     serviceId: service_id,
     commandType: "ONBOARD",
     status: "SUCCESS",
-    performedBy: req.user?.name || req.user?.email || "System",
+    performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null,
   });
 
   res.json({
@@ -212,7 +254,7 @@ async function offboardUserAccess(req, res) {
     serviceId: service_id,
     commandType: "OFFBOARD",
     status: "SUCCESS",
-    performedBy: req.user?.name || req.user?.email || "System",
+    performedBy: req.user?.name || req.user?.email || "System", actorUserId: req.user?.userId ?? null,
   });
 
   res.json({
@@ -222,54 +264,54 @@ async function offboardUserAccess(req, res) {
 }
 
 /**
- * GET /users/:userId/logs
- * Returns activity log records for a specific user from the `log` table.
+ * POST /users/:userId/invite
+ *
+ * Sends a fresh invite, which retires any earlier link. Separate from creating
+ * the person on purpose: mail can fail or be lost long after an account exists,
+ * so re-sending has to be something you can do at any time.
  */
-async function getUserLogs(req, res) {
+async function resendInvite(req, res) {
   const { userId } = req.params;
-  const pool = getPool();
 
-  const { rows: logRows } = await pool.query(
-    `SELECT
-       l.id,
-       l.user_id,
-       l.service_id,
-       l.command_type,
-       l.status,
-       l.error_message,
-       l.performed_by,
-       l.created_at,
-       s.service_name,
-       s.service_code
-     FROM log l
-     LEFT JOIN services s ON s.service_id = l.service_id
-     WHERE l.user_id = $1
-     ORDER BY l.created_at DESC, l.id DESC`,
+  const { rows } = await getPool().query(
+    `SELECT user_id, email, first_name, last_name, is_active, (password_hash IS NOT NULL) AS has_password
+       FROM users WHERE user_id = $1`,
     [userId]
   );
+  const user = rows[0];
 
-  const total = logRows.length;
-  const successCount = logRows.filter((r) => r.status === "SUCCESS").length;
-  const failedCount = logRows.filter((r) => r.status === "FAILED").length;
+  if (!user) throw ApiError.notFound("That person is no longer here.");
+  if (!user.is_active) throw ApiError.conflict("This account is inactive. Activate it before inviting them.");
+  if (user.has_password) {
+    throw ApiError.conflict("They already have a password. Use Edit details to reset it instead.");
+  }
+
+  const invite = await sendInvite({ user, actorUserId: req.user?.userId });
 
   res.json({
     success: true,
-    userId,
-    count: total,
-    summary: {
-      total,
-      success: successCount,
-      failed: failedCount,
-    },
-    data: logRows,
+    message: invite.sent
+      ? `A new invite has been emailed to ${user.email}.`
+      : "The invite email could not be sent, so pass this link on yourself.",
+    inviteSent: invite.sent,
+    inviteLink: invite.sent ? null : invite.link,
+    inviteError: invite.error || null,
+    expiresAt: invite.expiresAt,
   });
 }
 
+/** GET /users/mail-status — whether an invite could be emailed right now. */
+async function mailStatus(_req, res) {
+  const result = await verifyMail();
+  res.json({ success: true, data: result });
+}
+
 module.exports = {
+  resendInvite,
+  mailStatus,
   getUsers,
   createSystemUser,
   getUserAccess,
   onboardUserAccess,
   offboardUserAccess,
-  getUserLogs,
 };

@@ -7,7 +7,7 @@
  * from the database on each request (see requireAuth.middleware.js), which is
  * what makes revocation immediate.
  *
- * Table: easleydunn.session — see sql/001_create_session_table.sql.
+ * Table: <DB_SCHEMA>.session — see sql/001_create_session_table.sql.
  */
 
 "use strict";

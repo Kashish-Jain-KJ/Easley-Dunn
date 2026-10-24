@@ -14,7 +14,6 @@ const asyncHandler = require("../utils/asyncHandler");
 const {
   onboardGoogleDriveUser,
   offboardGoogleDriveUser,
-  auditGoogleDriveOwnership,
 } = require("../controllers/googleDrive.controller");
 
 const router = Router();
@@ -80,6 +79,5 @@ router.delete("/users/:userId", asyncHandler(offboardGoogleDriveUser));
 //  *       404:
 //  *         description: User not found
 //  */
-// router.get("/users/:userId/audit", asyncHandler(auditGoogleDriveOwnership));
 
 module.exports = router;

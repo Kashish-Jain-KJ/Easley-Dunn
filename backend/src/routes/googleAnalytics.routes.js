@@ -12,7 +12,6 @@ const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
 const {
   removeGoogleAnalyticsUser,
-  listGoogleAnalyticsAccessBindings,
   addGoogleAnalyticsUser,
 } = require("../controllers/googleAnalytics.controller");
 
@@ -41,7 +40,6 @@ const router = Router();
 //  */
 // router.get(
 //   "/access-bindings",
-//   asyncHandler(listGoogleAnalyticsAccessBindings)
 // );
 
 /**

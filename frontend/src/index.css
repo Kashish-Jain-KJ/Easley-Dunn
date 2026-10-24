@@ -2,6 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Scrollbars stay out of sight until the pointer is over the area that
+ * scrolls (or something inside it has focus), which is how macOS behaves and
+ * what most apps now do. The area still scrolls by wheel, trackpad, keyboard
+ * and touch when the bar is hidden.
+ */
+/* The console fills the window; only the panes inside it scroll. Without a
+   height here the root cannot be told to fill the screen, and scrolling past it
+   shows the page background instead of the console's. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: #f1f5f9;
+}
+
+.scroll-soft {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scroll-soft:hover,
+.scroll-soft:focus-within {
+  scrollbar-color: rgb(148 163 184 / 0.7) transparent;
+}
+.scroll-soft::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-soft::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-soft::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+.scroll-soft:hover::-webkit-scrollbar-thumb,
+.scroll-soft:focus-within::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.7);
+  background-clip: content-box;
+}
+.scroll-soft::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139 / 0.8);
+  background-clip: content-box;
+}
+
 
 /* KEEP_IN_SYNC(fullscreen/resources/figmake/shadcn/globals.css) */
 

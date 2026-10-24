@@ -8,7 +8,17 @@
 const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
 const requireAuth = require("../middlewares/requireAuth.middleware");
-const { login, changePassword, getCurrentUser, logout } = require("../controllers/passwordAuth.controller");
+const {
+  login,
+  changePassword,
+  getCurrentUser,
+  logout,
+  checkInvite,
+  acceptInvite,
+  requestPasswordReset,
+  checkReset,
+  acceptReset,
+} = require("../controllers/passwordAuth.controller");
 
 const router = Router();
 
@@ -63,6 +73,99 @@ const router = Router();
  *         description: Account is inactive or lacks console login permission
  */
 router.post("/login", asyncHandler(login));
+
+/**
+ * @swagger
+ * /auth/invite/{token}:
+ *   get:
+ *     summary: Check an invite link (public)
+ *     tags: [Auth]
+ *     parameters:
+ *       - { in: path, name: token, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: The invite is usable; returns who it is for. }
+ *       410: { description: Already used or expired. }
+ *   post:
+ *     summary: Set a first password with an invite link (public)
+ *     tags: [Auth]
+ *     parameters:
+ *       - { in: path, name: token, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password: { type: string, format: password }
+ *     responses:
+ *       200: { description: Password set; the link is now spent. }
+ *       400: { description: Password too short. }
+ *       410: { description: Already used or expired. }
+ */
+router.get("/invite/:token", asyncHandler(checkInvite));
+router.post("/invite/:token", asyncHandler(acceptInvite));
+
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Ask for a password-reset link (public)
+ *     description: >
+ *       Always answers the same way, whether or not the address has an account.
+ *       Anything else would let an unauthenticated caller test addresses and
+ *       learn which ones are real. Rate limited in app.js.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       200: { description: Accepted. Says nothing about whether the account exists. }
+ *       400: { description: No email given. }
+ *       429: { description: Too many requests. }
+ */
+router.post("/forgot-password", asyncHandler(requestPasswordReset));
+
+/**
+ * @swagger
+ * /auth/reset/{token}:
+ *   get:
+ *     summary: Check a password-reset link (public)
+ *     tags: [Auth]
+ *     parameters:
+ *       - { in: path, name: token, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: The link is usable; returns who it is for. }
+ *       410: { description: Already used or expired. }
+ *   post:
+ *     summary: Set a new password with a reset link (public)
+ *     description: Spends the link and ends every session on the account.
+ *     tags: [Auth]
+ *     parameters:
+ *       - { in: path, name: token, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password: { type: string, format: password }
+ *     responses:
+ *       200: { description: Password reset; the link is now spent. }
+ *       400: { description: Password too short. }
+ *       410: { description: Already used or expired. }
+ */
+router.get("/reset/:token", asyncHandler(checkReset));
+router.post("/reset/:token", asyncHandler(acceptReset));
 
 /**
  * @swagger

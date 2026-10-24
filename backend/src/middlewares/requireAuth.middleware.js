@@ -40,7 +40,7 @@ async function requireAuth(req, res, next) {
   try {
     ({ rows } = await getPool().query(
       `SELECT user_id, email, first_name, last_name, "Role", is_active, requires_password_change
-         FROM easleydunn.users
+         FROM users
         WHERE user_id = $1`,
       [userId]
     ));

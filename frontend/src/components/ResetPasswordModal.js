@@ -1,9 +1,12 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Lock, CheckCircle, AlertCircle, RefreshCw, KeyRound } from "lucide-react";
+import PasswordRules from "./PasswordRules";
+import { MIN_LENGTH, passwordRules, passwordIsValid } from "../utils/passwordPolicy";
 
 export default function ResetPasswordModal() {
   const { changePassword, logout } = useAuth();
+  // Same rules, same wording as the invite and reset pages.
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -13,16 +16,6 @@ export default function ResetPasswordModal() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!currentPassword || !newPassword || !confirmPassword) return;
-
-    if (newPassword.length < 6) {
-      setErrorMsg("New password must be at least 6 characters long.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setErrorMsg("New password and confirmation password do not match.");
-      return;
-    }
 
     setIsSubmitting(true);
     setErrorMsg("");
@@ -81,7 +74,7 @@ export default function ResetPasswordModal() {
               <input
                 type="password"
                 required
-                placeholder="New password (min 6 characters)"
+                placeholder={`New password (min ${MIN_LENGTH} characters)`}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -107,10 +100,12 @@ export default function ResetPasswordModal() {
             </div>
           </div>
 
+          <PasswordRules rules={passwordRules(newPassword, confirmPassword)} />
+
           <div className="pt-2 flex flex-col gap-2">
             <button
               type="submit"
-              disabled={isSubmitting || !currentPassword || !newPassword || !confirmPassword}
+              disabled={isSubmitting || !currentPassword || !passwordIsValid(newPassword, confirmPassword)}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               {isSubmitting ? (

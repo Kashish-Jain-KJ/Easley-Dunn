@@ -1,7 +1,7 @@
 /**
  * @file requireRole.middleware.js
  * @description Role-Based Access Control (RBAC) middleware enforcing minimum
- * role level in the hierarchy (OPERATOR: 1, MANAGER: 2, ADMIN: 3).
+ * role level in the hierarchy (USER: 1, LEAD: 2, ADMIN: 3).
  */
 
 "use strict";
@@ -11,7 +11,7 @@ const { ROLE_LEVELS } = require("../config/roles.config");
 
 /**
  * Middleware factory enforcing a minimum role level.
- * @param {"OPERATOR" | "MANAGER" | "ADMIN"} minRole
+ * @param {"USER" | "LEAD" | "ADMIN"} minRole
  */
 function requireRole(minRole) {
   const requiredLevel = ROLE_LEVELS[minRole];

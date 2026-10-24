@@ -70,7 +70,7 @@ describe("Discord integration", () => {
     it("should return 404 if the DISCORD service row does not exist", async () => {
       const pool = getPool();
       const originalQuery = pool.query;
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
           return Promise.resolve({ rows: [] });
         }
@@ -100,7 +100,7 @@ describe("Discord integration", () => {
         if (text.includes("FROM users WHERE user_id")) {
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           loggedFailure = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }
@@ -125,7 +125,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
           return Promise.resolve({ rows: [{ service_id: 11 }] });
         }
@@ -138,7 +138,7 @@ describe("Discord integration", () => {
         if (text.includes("external_account_identifier IS NOT NULL")) {
           return Promise.resolve({ rows: [] }); // no fallback guild in DB either
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -188,7 +188,7 @@ describe("Discord integration", () => {
           accessActivated = true;
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           successLogged = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
@@ -229,7 +229,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
           return Promise.resolve({ rows: [{ service_id: 11 }] });
         }
@@ -275,7 +275,7 @@ describe("Discord integration", () => {
             rows: [{ access_id: 202, external_account_identifier: "guild-456", external_user_identifier: null, service_id: 11 }],
           });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           failureLogged = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }
@@ -318,8 +318,8 @@ describe("Discord integration", () => {
             rows: [{ access_id: 203, external_account_identifier: "guild-456", external_user_identifier: null, service_id: 11 }],
           });
         }
-        if (text.includes("INSERT INTO log")) {
-          loggedErrorMessage = params ? (params[4] || params[2] || "") : "";
+        if (text.includes("INSERT INTO audit_events")) {
+          loggedErrorMessage = params ? String(params[7] || "") : "";
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -357,7 +357,7 @@ describe("Discord integration", () => {
         if (text.includes("usa.is_active = true")) {
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           loggedFailure = params && (params.includes("FAILED") || params[3] === "FAILED");
           return Promise.resolve({ rows: [] });
         }
@@ -379,7 +379,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
           return Promise.resolve({ rows: [{ service_id: 11 }] });
         }
@@ -423,7 +423,7 @@ describe("Discord integration", () => {
           accessDeactivated = true;
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           successLogged = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
@@ -466,8 +466,8 @@ describe("Discord integration", () => {
             rows: [{ access_id: 302, external_account_identifier: "guild-456", external_user_identifier: "discord-user-999", service_id: 11 }],
           });
         }
-        if (text.includes("INSERT INTO log")) {
-          loggedErrorMessage = params ? (params[4] || params[2] || "") : "";
+        if (text.includes("INSERT INTO audit_events")) {
+          loggedErrorMessage = params ? String(params[7] || "") : "";
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -503,7 +503,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
           return Promise.resolve({ rows: [{ service_id: 11 }] });
         }
@@ -527,7 +527,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("SELECT service_id FROM services WHERE service_code")) {
           return Promise.resolve({ rows: [{ service_id: 11 }] });
         }
@@ -578,7 +578,7 @@ describe("Discord integration", () => {
           updatedWith = params[0];
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("INSERT INTO log")) {
+        if (text.includes("INSERT INTO audit_events")) {
           successLogged = params && (params.includes("SUCCESS") || params[3] === "SUCCESS");
           return Promise.resolve({ rows: [] });
         }
@@ -622,8 +622,8 @@ describe("Discord integration", () => {
         if (text.includes("ORDER BY usa.last_synced_at")) {
           return Promise.resolve({ rows: [{ access_id: 402, external_account_identifier: "guild-456" }] });
         }
-        if (text.includes("INSERT INTO log")) {
-          loggedErrorMessage = params ? (params[4] || params[2] || "") : "";
+        if (text.includes("INSERT INTO audit_events")) {
+          loggedErrorMessage = params ? String(params[7] || "") : "";
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -658,8 +658,8 @@ describe("Discord integration", () => {
         if (text.includes("ORDER BY usa.last_synced_at")) {
           return Promise.resolve({ rows: [{ access_id: 403, external_account_identifier: "guild-456" }] });
         }
-        if (text.includes("INSERT INTO log")) {
-          loggedErrorMessage = params ? (params[4] || params[2] || "") : "";
+        if (text.includes("INSERT INTO audit_events")) {
+          loggedErrorMessage = params ? String(params[7] || "") : "";
           return Promise.resolve({ rows: [] });
         }
         return Promise.resolve({ rows: [] });
@@ -781,7 +781,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("ORDER BY usa.last_synced_at")) {
           return Promise.resolve({ rows: [] });
         }
@@ -808,7 +808,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("ORDER BY usa.last_synced_at")) {
           return Promise.resolve({ rows: [{ is_active: true, external_user_identifier: null }] });
         }
@@ -833,7 +833,7 @@ describe("Discord integration", () => {
       const pool = getPool();
       const originalQuery = pool.query;
 
-      pool.query = jest.fn().mockImplementation((text, params) => {
+      pool.query = jest.fn().mockImplementation((text, _params) => {
         if (text.includes("ORDER BY usa.last_synced_at")) {
           return Promise.resolve({ rows: [{ is_active: true, external_user_identifier: "discord-user-222" }] });
         }

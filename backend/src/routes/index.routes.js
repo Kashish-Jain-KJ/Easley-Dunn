@@ -22,6 +22,9 @@ const googleCloudRoutes = require("./googleCloud.routes");
 const firebaseRoutes = require("./firebase.routes");
 const kanboardRoutes = require("./kanboard.routes");
 const { discordRoutes, discordPublicRoutes } = require("./discord.routes");
+const teamsRoutes = require("./teams.routes");
+const auditRoutes = require("./audit.routes");
+const userRoutes = require("./user.routes");
 
 const requireAuth = require("../middlewares/requireAuth.middleware");
 const requireRole = require("../middlewares/requireRole.middleware");
@@ -36,22 +39,33 @@ router.use("/auth", authRoutes);
 // here, ahead of the gated /discord block below, so these match first.
 router.use("/discord", discordPublicRoutes);
 
-// Protected RBAC routes (Requires minimum OPERATOR role)
-const rbacOperator = [requireAuth, requirePasswordCurrent, requireRole("OPERATOR")];
+// Signed in, any role: the caller's own access, teams and history. Its own
+// guard list rather than an absent one — a route must never become reachable
+// by omission. requirePasswordCurrent stays: someone who still owes a password
+// change has no business reading data, and /auth/change-password is exempt so
+// they have a way out.
+const signedIn = [requireAuth, requirePasswordCurrent];
 
-router.use("/users", rbacOperator, usersRoutes);
-router.use("/services", rbacOperator, servicesRoutes);
-router.use("/google-play", rbacOperator, googlePlayRoutes);
-router.use("/bigquery", rbacOperator, bigQueryRoutes);
-router.use("/google-drive", rbacOperator, googleDriveRoutes);
-router.use("/google-analytics", rbacOperator, googleAnalyticsRoutes);
-router.use(["/appleStoreConnect", "/appleStoreConnet"], rbacOperator, appleStoreConnectRoutes);
-router.use("/google-cloud", rbacOperator, googleCloudRoutes);
-router.use("/firebase", rbacOperator, firebaseRoutes);
-router.use("/kanboard", rbacOperator, kanboardRoutes);
-router.use("/discord", rbacOperator, discordRoutes);
+router.use("/user", signedIn, userRoutes);
 
-// Role delegation routes (Requires minimum MANAGER role)
+// Protected RBAC routes (ADMIN only)
+const rbacAdmin = [requireAuth, requirePasswordCurrent, requireRole("ADMIN")];
+
+router.use("/users", rbacAdmin, usersRoutes);
+router.use("/services", rbacAdmin, servicesRoutes);
+router.use("/google-play", rbacAdmin, googlePlayRoutes);
+router.use("/bigquery", rbacAdmin, bigQueryRoutes);
+router.use("/google-drive", rbacAdmin, googleDriveRoutes);
+router.use("/google-analytics", rbacAdmin, googleAnalyticsRoutes);
+router.use(["/appleStoreConnect", "/appleStoreConnet"], rbacAdmin, appleStoreConnectRoutes);
+router.use("/google-cloud", rbacAdmin, googleCloudRoutes);
+router.use("/firebase", rbacAdmin, firebaseRoutes);
+router.use("/kanboard", rbacAdmin, kanboardRoutes);
+router.use("/discord", rbacAdmin, discordRoutes);
+router.use("/teams", rbacAdmin, teamsRoutes);
+router.use("/audit", rbacAdmin, auditRoutes);
+
+// Role management routes (ADMIN only, enforced in roles.routes.js)
 router.use("/admin/roles", requireAuth, requirePasswordCurrent, rolesRoutes);
 
 module.exports = router;

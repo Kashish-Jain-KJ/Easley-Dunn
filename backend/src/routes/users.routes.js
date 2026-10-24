@@ -13,11 +13,12 @@ const { Router } = require("express");
 const asyncHandler = require("../utils/asyncHandler");
 const {
   getUsers,
+  resendInvite,
+  mailStatus,
   createSystemUser,
   getUserAccess,
   onboardUserAccess,
   offboardUserAccess,
-  getUserLogs,
 } = require("../controllers/users.controller");
 
 const router = Router();
@@ -53,11 +54,11 @@ const router = Router();
  *                       name: { type: string, example: "John Doe" }
  *                       email: { type: string, example: "john.doe@company.com" }
  *                       is_active: { type: boolean, example: true }
- *                       Role: { type: string, example: "MEMBER" }
+ *                       Role: { type: string, example: "USER" }
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Forbidden (Requires OPERATOR role)
+ *         description: Forbidden (Requires ADMIN role)
  */
 router.get("/", asyncHandler(getUsers));
 
@@ -113,7 +114,7 @@ router.get("/", asyncHandler(getUsers));
  *                     name: { type: string, example: "John Doe" }
  *                     email: { type: string, example: "john.doe@company.com" }
  *                     is_active: { type: boolean, example: true }
- *                     Role: { type: string, example: "MEMBER" }
+ *                     Role: { type: string, example: "USER" }
  *       400:
  *         description: Email is missing or user with email already exists
  *       401:
@@ -173,6 +174,34 @@ router.post("/", asyncHandler(createSystemUser));
  *       403:
  *         description: Forbidden
  */
+/**
+ * @swagger
+ * /users/mail-status:
+ *   get:
+ *     summary: Whether an invite could be emailed right now
+ *     tags: [Users]
+ *     security: [{ cookieAuth: [] }]
+ *     responses:
+ *       200: { description: "{ ok, reason }" }
+ */
+router.get("/mail-status", asyncHandler(mailStatus));
+
+/**
+ * @swagger
+ * /users/{userId}/invite:
+ *   post:
+ *     summary: Send a fresh invite, retiring any earlier link
+ *     tags: [Users]
+ *     security: [{ cookieAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: userId, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Invite sent, or the link to pass on if mail failed. }
+ *       404: { description: No such person. }
+ *       409: { description: Inactive, or they already have a password. }
+ */
+router.post("/:userId/invite", asyncHandler(resendInvite));
+
 router.get("/:userId/access", asyncHandler(getUserAccess));
 
 /**
@@ -257,60 +286,6 @@ router.post("/:userId/access/:accessId/onboard", asyncHandler(onboardUserAccess)
  */
 router.post("/:userId/access/:accessId/offboard", asyncHandler(offboardUserAccess));
 
-/**
- * @swagger
- * /users/{userId}/logs:
- *   get:
- *     summary: Get audit activity logs for an employee
- *     description: Returns chronological audit logs of all ONBOARD / OFFBOARD commands and results for the user.
- *     tags: [Users]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: integer
- *         description: The user ID
- *     responses:
- *       200:
- *         description: Activity log entries and summary stats.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 userId: { type: string, example: "4" }
- *                 count: { type: integer, example: 10 }
- *                 summary:
- *                   type: object
- *                   properties:
- *                     total: { type: integer, example: 10 }
- *                     success: { type: integer, example: 8 }
- *                     failed: { type: integer, example: 2 }
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id: { type: integer, example: 21 }
- *                       user_id: { type: integer, example: 4 }
- *                       service_id: { type: integer, example: 3 }
- *                       command_type: { type: string, example: "ONBOARD" }
- *                       status: { type: string, example: "SUCCESS" }
- *                       error_message: { type: string, nullable: true }
- *                       performed_by: { type: string, example: "Kashish Jain" }
- *                       created_at: { type: string, example: "2026-10-05T13:04:55.848Z" }
- *                       service_name: { type: string, example: "BigQuery" }
- *                       service_code: { type: string, example: "BIGQUERY" }
- *       401:
- *         description: Not authenticated
- *       403:
- *         description: Forbidden
- */
-router.get("/:userId/logs", asyncHandler(getUserLogs));
 
 module.exports = router;
 

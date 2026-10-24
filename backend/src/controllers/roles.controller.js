@@ -1,6 +1,6 @@
 /**
  * @file roles.controller.js
- * @description Role delegation, editing, and revocation endpoints for ADMIN, MANAGER, and OPERATOR users.
+ * @description Role assignment, editing, and revocation endpoints. ADMIN only (enforced at the route).
  */
 
 "use strict";
@@ -9,24 +9,38 @@ const bcrypt = require("bcryptjs");
 const { getPool } = require("../db/database");
 const ApiError = require("../utils/ApiError");
 const { sendRoleNotificationEmail } = require("../services/roleEmail.service");
-const { VALID_ROLES, ROLE_LEVELS } = require("../config/roles.config");
+const { ASSIGNABLE_ROLES } = require("../config/roles.config");
 const { splitName } = require("../utils/userUtils");
 const appConfig = require("../config/app.config");
 const { revokeAllForUser } = require("../services/session.service");
+const { withTransaction } = require("../db/transaction");
+const { clearLeadOnRoleChange } = require("../services/teams.service");
 
 const PEPPER = appConfig.passwordPepper;
+
+/**
+ * Runs a role-changing UPDATE. If it moves a user off LEAD, their team lead flag
+ * is cleared and audited in the same transaction, so no non-LEAD leads a team.
+ */
+async function updateRole(sql, params, { userId, fromRole, toRole, actorUserId }) {
+  if (fromRole !== "LEAD" || toRole === "LEAD") {
+    await getPool().query(sql, params);
+    return;
+  }
+  await withTransaction(async (db) => {
+    await db.query(sql, params);
+    await clearLeadOnRoleChange(userId, toRole, actorUserId, db);
+  });
+}
 const BCRYPT_COST = 12;
 const MIN_PASSWORD_LENGTH = 12;
 
 /**
  * POST /admin/roles/grant
- * Requires OPERATOR, MANAGER, or ADMIN caller.
+ * Requires ADMIN caller. Assigns LEAD or USER; ADMIN cannot be granted here.
  * Body: { email, name?, role, password? }
  */
 async function grantRole(req, res) {
-  const callerRole = String(req.user.role || "").toUpperCase();
-  const callerLevel = ROLE_LEVELS[callerRole] || 0;
-
   const { email, name, password } = req.body;
   const targetRole = String(req.body.role || "").toUpperCase();
 
@@ -34,22 +48,8 @@ async function grantRole(req, res) {
     throw ApiError.badRequest("email is required.");
   }
 
-  if (!VALID_ROLES.includes(targetRole)) {
-    throw ApiError.badRequest(`role must be one of: ${VALID_ROLES.join(", ")}.`);
-  }
-
-  const targetLevel = ROLE_LEVELS[targetRole] || 0;
-
-  if (callerRole === "OPERATOR" && targetLevel > 2) {
-    throw ApiError.forbidden("Access Operators can only assign 'MEMBER' or 'OPERATOR' roles.");
-  }
-
-  if (callerRole === "MANAGER" && targetRole === "ADMIN") {
-    throw ApiError.forbidden("Access Managers cannot grant 'ADMIN' role access.");
-  }
-
-  if (callerLevel < targetLevel && callerRole !== "ADMIN") {
-    throw ApiError.forbidden(`You do not have permission to grant the '${targetRole}' role.`);
+  if (!ASSIGNABLE_ROLES.includes(targetRole)) {
+    throw ApiError.badRequest(`role must be one of: ${ASSIGNABLE_ROLES.join(", ")}.`);
   }
 
   const normalizedEmail = email.toLowerCase().trim();
@@ -69,7 +69,7 @@ async function grantRole(req, res) {
   }
 
   const { rows: existingRows } = await pool.query(
-    `SELECT user_id, email, first_name, last_name, "Role", password_hash FROM easleydunn.users WHERE LOWER(email) = $1`,
+    `SELECT user_id, email, first_name, last_name, "Role", password_hash FROM users WHERE LOWER(email) = $1`,
     [normalizedEmail]
   );
 
@@ -77,39 +77,30 @@ async function grantRole(req, res) {
   if (existingRows.length > 0) {
     userId = existingRows[0].user_id;
     const currentTargetRole = String(existingRows[0].Role || "NONE").toUpperCase();
-    const currentTargetLevel = ROLE_LEVELS[currentTargetRole] || 0;
     const hasExistingPassword = !!existingRows[0].password_hash;
 
-    // Check if caller is allowed to edit existing user's role
-    if (callerRole === "MANAGER" && currentTargetRole === "ADMIN") {
-      throw ApiError.forbidden("Access Managers cannot edit an Admin account.");
-    }
-    if (callerRole === "OPERATOR" && currentTargetLevel > 1) {
-      throw ApiError.forbidden("Access Operators cannot edit higher tier role accounts.");
+    if (currentTargetRole === "ADMIN") {
+      throw ApiError.forbidden("Admin accounts cannot be edited through the API.");
     }
 
-    if (targetRole !== "MEMBER" && !hasExistingPassword && !passwordHash) {
-      throw ApiError.badRequest("An initial password is required to grant console role access (Operator, Manager, Admin) to a user who does not have a password yet.");
+    // Every role can log in, so every account needs a password.
+    if (!hasExistingPassword && !passwordHash) {
+      throw ApiError.badRequest("An initial password is required for a user who does not have a password yet.");
     }
 
-    if (targetRole === "MEMBER") {
-      await pool.query(
-        `UPDATE easleydunn.users SET "Role" = 'MEMBER', password_hash = NULL, requires_password_change = false WHERE user_id = $1`,
-        [userId]
-      );
-      // Console access withdrawn — end any session already holding it.
-      await revokeAllForUser(userId);
-    } else if (passwordHash) {
-      await pool.query(
-        `UPDATE easleydunn.users SET "Role" = $1, password_hash = $2, requires_password_change = true WHERE user_id = $3`,
-        [targetRole, passwordHash, userId]
+    if (passwordHash) {
+      await updateRole(
+        `UPDATE users SET "Role" = $1, password_hash = $2, requires_password_change = true WHERE user_id = $3`,
+        [targetRole, passwordHash, userId],
+        { userId, fromRole: currentTargetRole, toRole: targetRole, actorUserId: req.user.userId }
       );
       // Credentials were reset by an administrator — sign the user out everywhere.
       await revokeAllForUser(userId);
     } else {
-      await pool.query(
-        `UPDATE easleydunn.users SET "Role" = $1 WHERE user_id = $2`,
-        [targetRole, userId]
+      await updateRole(
+        `UPDATE users SET "Role" = $1 WHERE user_id = $2`,
+        [targetRole, userId],
+        { userId, fromRole: currentTargetRole, toRole: targetRole, actorUserId: req.user.userId }
       );
       // OWASP: a privilege level change must not be inherited by a session
       // that predates it. The change is made by an admin from a different
@@ -121,20 +112,17 @@ async function grantRole(req, res) {
       }
     }
   } else {
-    if (targetRole !== "MEMBER" && !passwordHash) {
-      throw ApiError.badRequest("An initial password is required when creating and assigning console role access to a new user.");
+    if (!passwordHash) {
+      throw ApiError.badRequest("An initial password is required when creating a new user.");
     }
 
     const { first_name, last_name } = splitName(name);
-    const isMember = targetRole === "MEMBER";
-    const finalPasswordHash = isMember ? null : passwordHash;
-    const finalRequiresPasswordChange = isMember ? false : true;
 
     const { rows: insertedRows } = await pool.query(
-      `INSERT INTO easleydunn.users (first_name, last_name, email, is_active, "Role", password_hash, requires_password_change)
-       VALUES ($1, $2, $3, true, $4, $5, $6)
+      `INSERT INTO users (first_name, last_name, email, is_active, "Role", password_hash, requires_password_change)
+       VALUES ($1, $2, $3, true, $4, $5, true)
        RETURNING user_id`,
-      [first_name, last_name, normalizedEmail, targetRole, finalPasswordHash, finalRequiresPasswordChange]
+      [first_name, last_name, normalizedEmail, targetRole, passwordHash]
     );
     userId = insertedRows[0].user_id;
   }
@@ -159,108 +147,12 @@ async function grantRole(req, res) {
 }
 
 /**
- * DELETE /admin/roles/:userId
- * Revokes a user's Cerberus console role and login credentials.
- */
-async function revokeRole(req, res) {
-  const { userId } = req.params;
-  const callerUserId = req.user.userId;
-  const callerRole = String(req.user.role || "").toUpperCase();
-  const callerLevel = ROLE_LEVELS[callerRole] || 0;
-
-  if (String(callerUserId) === String(userId)) {
-    throw ApiError.badRequest("You cannot revoke your own active Cerberus role.");
-  }
-
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT user_id, email, "Role" FROM easleydunn.users WHERE user_id = $1`,
-    [userId]
-  );
-
-  if (rows.length === 0) {
-    throw ApiError.notFound("User not found.");
-  }
-
-  const targetUser = rows[0];
-  const targetRole = String(targetUser.Role || "NONE").toUpperCase();
-  const targetLevel = ROLE_LEVELS[targetRole] || 0;
-
-  if (callerRole === "OPERATOR" && targetRole !== "OPERATOR") {
-    throw ApiError.forbidden("Access Operators can only revoke 'OPERATOR' role access.");
-  }
-
-  if (callerRole === "MANAGER" && targetRole === "ADMIN") {
-    throw ApiError.forbidden("Access Managers cannot revoke 'ADMIN' role access.");
-  }
-
-  if (callerLevel < targetLevel && callerRole !== "ADMIN") {
-    throw ApiError.forbidden(`You do not have permission to revoke access for role '${targetRole}'.`);
-  }
-
-  await pool.query(
-    `UPDATE easleydunn.users SET "Role" = 'MEMBER', password_hash = NULL WHERE user_id = $1`,
-    [userId]
-  );
-
-  // Revocation has to end live sessions, not just future logins.
-  await revokeAllForUser(userId);
-
-  res.json({
-    success: true,
-    message: `Successfully revoked Cerberus console access for ${targetUser.email}.`,
-  });
-}
-
-/**
- * GET /admin/roles/users
- * Returns list of all users and their assigned roles.
- */
-async function getRoleUsers(req, res) {
-  const pool = getPool();
-
-  // Ensure all NULL or 'NONE' roles in the database are migrated to 'MEMBER'
-  await pool.query(
-    `UPDATE easleydunn.users SET "Role" = 'MEMBER' WHERE "Role" IS NULL OR "Role" = 'NONE'`
-  );
-
-  // Clean up any lingering password data or flags for MEMBER accounts
-  await pool.query(
-    `UPDATE easleydunn.users SET password_hash = NULL, requires_password_change = false WHERE "Role" = 'MEMBER'`
-  );
-
-  const { rows } = await pool.query(
-    `SELECT user_id, first_name, last_name, email, is_active, "Role", last_login_at, password_hash
-     FROM easleydunn.users
-     ORDER BY user_id ASC`
-  );
-
-  const users = rows.map((u) => ({
-    userId: u.user_id,
-    name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email,
-    email: u.email,
-    role: u.Role || "MEMBER",
-    isActive: u.is_active,
-    hasPassword: !!u.password_hash,
-    lastLoginAt: u.last_login_at,
-  }));
-
-  res.json({
-    success: true,
-    count: users.length,
-    users,
-  });
-}
-
-/**
  * PATCH /admin/roles/:userId/status
  * Toggles a user's active/inactive status (is_active boolean).
  */
 async function toggleUserStatus(req, res) {
   const { userId } = req.params;
   const callerUserId = req.user.userId;
-  const callerRole = String(req.user.role || "").toUpperCase();
-  const callerLevel = ROLE_LEVELS[callerRole] || 0;
 
   if (String(callerUserId) === String(userId)) {
     throw ApiError.badRequest("Self-deactivation blocked: You cannot change your own active logged-in status.");
@@ -268,7 +160,7 @@ async function toggleUserStatus(req, res) {
 
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT user_id, email, is_active, "Role" FROM easleydunn.users WHERE user_id = $1`,
+    `SELECT user_id, email, is_active, "Role" FROM users WHERE user_id = $1`,
     [userId]
   );
 
@@ -278,18 +170,9 @@ async function toggleUserStatus(req, res) {
 
   const targetUser = rows[0];
   const targetRole = String(targetUser.Role || "NONE").toUpperCase();
-  const targetLevel = ROLE_LEVELS[targetRole] || 0;
 
-  if (callerRole === "OPERATOR" && targetRole !== "MEMBER" && targetRole !== "OPERATOR") {
-    throw ApiError.forbidden("Access Operators can only toggle status for 'MEMBER' or 'OPERATOR' roles.");
-  }
-
-  if (callerRole === "MANAGER" && targetRole === "ADMIN") {
-    throw ApiError.forbidden("Access Managers cannot modify status for 'ADMIN' accounts.");
-  }
-
-  if (callerLevel < targetLevel && callerRole !== "ADMIN") {
-    throw ApiError.forbidden(`You do not have permission to modify status for role '${targetRole}'.`);
+  if (targetRole === "ADMIN") {
+    throw ApiError.forbidden("Admin accounts cannot be edited through the API.");
   }
 
   const newIsActive = !targetUser.is_active;
@@ -312,15 +195,16 @@ async function toggleUserStatus(req, res) {
   }
 
   if (!newIsActive) {
-    await pool.query(
-      `UPDATE easleydunn.users SET is_active = false, "Role" = 'MEMBER' WHERE user_id = $1`,
-      [userId]
+    await updateRole(
+      `UPDATE users SET is_active = false, "Role" = 'USER' WHERE user_id = $1`,
+      [userId],
+      { userId, fromRole: targetRole, toRole: "USER", actorUserId: callerUserId }
     );
     // Deactivation takes effect immediately, including for anyone logged in.
     await revokeAllForUser(userId);
   } else {
     await pool.query(
-      `UPDATE easleydunn.users SET is_active = true WHERE user_id = $1`,
+      `UPDATE users SET is_active = true WHERE user_id = $1`,
       [userId]
     );
   }
@@ -338,7 +222,5 @@ async function toggleUserStatus(req, res) {
 
 module.exports = {
   grantRole,
-  revokeRole,
-  getRoleUsers,
   toggleUserStatus,
 };

@@ -8,8 +8,3 @@
 # Runtime output — winston writes these; error.log contains stack traces
 /logs/
 
-# Personal working folders, not part of the codebase
-/AppSec Assessment/
-/Privacy Policy/
-/Testing/
-/to-do/
