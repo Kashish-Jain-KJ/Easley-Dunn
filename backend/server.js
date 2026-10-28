@@ -10,8 +10,11 @@
 
 "use strict";
 
-// Load .env BEFORE any config file is required
-require("dotenv").config();
+const path = require("path");
+
+// Load .env BEFORE any config file is required.
+// Explicitly resolve the path so starting from either the root or backend directory works.
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 const app = require("./src/app");
 const appConfig = require("./src/config/app.config");
