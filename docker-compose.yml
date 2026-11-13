@@ -1,0 +1,94 @@
+# Cerberus production stack for the DocMost server.
+#
+# Resolved with Hitesh/Pratyush (see launch plan thread):
+#   - Images: GitHub Actions builds both on each release tag and pushes to
+#     ghcr.io; the server pulls with a read-only token (set up outside this
+#     file, in the runbook). IMAGE_TAG picks which release to run.
+#   - mem_limit: 512/512/128 approved as a starting point — still needs
+#     verification via `docker stats` under load (adding users, granting
+#     access) once it's actually running, per Pratyush.
+#   - cerberus_db's name/user: confirmed as cerberus / cerberus_app.
+#   - /discord routing: NOT a Caddy issue — the confirm-page HTML was
+#     hardcoding relative links that skipped the /api prefix. Fixed in
+#     discord.controller.js; everything does stay under /api, no Caddy
+#     change needed.
+#
+# cerberus_db now builds from ./cerberus-db (Kashish's purpose-built image —
+# schema + seeded services baked in via /docker-entrypoint-initdb.d/) instead
+# of plain postgres:16-alpine. The production .env MUST set DB_SCHEMA=public
+# to match what that image's init scripts create — the old `easleydunn`
+# schema name from the Supabase dev setup doesn't apply here.
+#
+# Secrets (SESSION_SECRET, PASSWORD_PEPPER, POSTGRES_PASSWORD, SMTP settings,
+# MAIL_FROM) live only in .env on the server — never in this file or the repo.
+
+networks:
+  cerberus_edge:
+    external: true
+  cerberus_internal:
+    internal: true
+
+volumes:
+  cerberus_api_logs:
+  cerberus_db_data:
+
+services:
+  cerberus_db:
+    # Same registry/build convention as the other two services — path
+    # inferred the same way, confirm before first pull.
+    image: ghcr.io/professoreasley/cerberus-db:${IMAGE_TAG:-latest}
+    container_name: cerberus_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cerberus}
+      POSTGRES_USER: ${POSTGRES_USER:-cerberus_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - cerberus_db_data:/var/lib/postgresql/data
+    networks:
+      - cerberus_internal
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cerberus_app} -d ${POSTGRES_DB:-cerberus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cerberus_api:
+    # Path inferred from ProfessorEasley/Cerberus_Gating (GHCR names are
+    # lowercase) — confirm the exact org/repo casing before first pull.
+    image: ghcr.io/professoreasley/cerberus_api:${IMAGE_TAG:-latest}
+    container_name: cerberus_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 5000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cerberus_app}:${POSTGRES_PASSWORD}@cerberus_db:5432/${POSTGRES_DB:-cerberus}
+    volumes:
+      - cerberus_api_logs:/app/logs
+      # Each integration's key only exists on the server once its stage goes
+      # live. An empty host folder here is harmless — the app just treats
+      # that integration as unconfigured. Rollback = delete the file inside.
+      - ./secrets/firebase_json:/app/firebase_json:ro
+      - ./secrets/googleplay_json:/app/googleplay_json:ro
+      - ./secrets/bigquery_json:/app/bigquery_json:ro
+      - ./secrets/googledrive_json:/app/googledrive_json:ro
+      - ./secrets/googleanalytics_json:/app/googleanalytics_json:ro
+      - ./secrets/apple_key:/app/apple_key:ro
+      - ./secrets/googlecloud_json:/app/googlecloud_json:ro
+    networks:
+      - cerberus_edge
+      - cerberus_internal
+    mem_limit: 512m
+    depends_on:
+      cerberus_db:
+        condition: service_healthy
+
+  cerberus_web:
+    image: ghcr.io/professoreasley/cerberus_web:${IMAGE_TAG:-latest}
+    container_name: cerberus_web
+    restart: unless-stopped
+    networks:
+      - cerberus_edge
+    mem_limit: 128m

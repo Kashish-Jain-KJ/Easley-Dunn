@@ -8,6 +8,10 @@
 # Runtime output — winston writes these; error.log contains stack traces
 /logs/
 
+# Local-only compose override — auto-merged by Compose with no flag needed,
+# so a committed one would silently change what `docker-compose up` does
+# for everyone who clones the repo.
+docker-compose.override.yml
 
 # Dependencies — installed by npm, never committed
 node_modules/

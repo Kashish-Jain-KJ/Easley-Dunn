@@ -13,6 +13,10 @@ const request = require("supertest");
 const app = require("../../src/app");
 const { getPool } = require("../../src/db/database");
 
+// Mirrors discord.controller.js's getAppBaseUrl() so these assertions track
+// whatever API_URL happens to be set to, rather than hardcoding one value.
+const appBaseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 5000}`;
+
 jest.mock("nodemailer", () => ({
   createTransport: jest.fn(),
 }));
@@ -743,7 +747,7 @@ describe("Discord integration", () => {
         expect(res.headers["content-type"]).toMatch(/html/);
         expect(res.text).toContain("Couldn't link your Discord account");
         expect(res.text).toContain("No Discord member found matching username 'nobody'");
-        expect(res.text).toContain('href="/discord/users/42/confirm-page"');
+        expect(res.text).toContain(`href="${appBaseUrl}/discord/users/42/confirm-page"`);
       } finally {
         pool.query = originalQuery;
       }
@@ -764,7 +768,7 @@ describe("Discord integration", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.headers["content-type"]).toMatch(/html/);
-      expect(res.text).toContain('<form method="POST" action="/discord/users/42/confirm">');
+      expect(res.text).toContain(`<form method="POST" action="${appBaseUrl}/discord/users/42/confirm">`);
       expect(res.text).toContain('name="username"');
     });
   });
