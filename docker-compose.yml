@@ -13,6 +13,12 @@
 #     discord.controller.js; everything does stay under /api, no Caddy
 #     change needed.
 #
+# cerberus_db now builds from ./cerberus-db (Kashish's purpose-built image —
+# schema + seeded services baked in via /docker-entrypoint-initdb.d/) instead
+# of plain postgres:16-alpine. The production .env MUST set DB_SCHEMA=public
+# to match what that image's init scripts create — the old `easleydunn`
+# schema name from the Supabase dev setup doesn't apply here.
+#
 # Secrets (SESSION_SECRET, PASSWORD_PEPPER, POSTGRES_PASSWORD, SMTP settings,
 # MAIL_FROM) live only in .env on the server — never in this file or the repo.
 
@@ -28,7 +34,9 @@ volumes:
 
 services:
   cerberus_db:
-    image: postgres:16-alpine
+    # Same registry/build convention as the other two services — path
+    # inferred the same way, confirm before first pull.
+    image: ghcr.io/professoreasley/cerberus-db:${IMAGE_TAG:-latest}
     container_name: cerberus_db
     restart: unless-stopped
     environment:
