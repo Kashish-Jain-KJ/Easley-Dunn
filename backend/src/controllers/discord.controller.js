@@ -59,12 +59,13 @@ async function sendInviteEmail(toEmail, inviteUrl, confirmPageUrl) {
     from: fromEmail,
     to: toEmail,
     subject: "You've been invited to the Easley-Dunn Discord",
-    text: `Hi,\n\nYou've been invited to join the Easley-Dunn Discord server. This invite is single-use and expires in 24 hours:\n\n${inviteUrl}\n\nOnce you're in, check #welcome to pick your team role, then confirm your Discord username here so we can manage your access:\n\n${confirmPageUrl}\n\nBest,\nEasley-Dunn`,
+    text: `Hi,\n\nYou've been invited to join the Easley-Dunn Discord server. There are two steps, and your access isn't set up until you've done both:\n\nStep 2 — Confirm your Discord username (do this after you've joined, from #welcome):\n${confirmPageUrl}\n\nStep 1 — Join the server with this single-use invite, which expires in 24 hours:\n${inviteUrl}\n\nBest,\nEasley-Dunn`,
     html: `
       <p>Hi,</p>
-      <p>You've been invited to join the Easley-Dunn Discord server. This invite is single-use and expires in 24 hours:</p>
+      <p>You've been invited to join the Easley-Dunn Discord server. There are two steps, and your access isn't set up until you've done both:</p>
+      <p><strong>Step 2</strong> — <a href="${confirmPageUrl}">confirm your Discord username here</a> (do this after you've joined, from #welcome).</p>
+      <p><strong>Step 1</strong> — join the server with this single-use invite, which expires in 24 hours:</p>
       <p><a href="${inviteUrl}">${inviteUrl}</a></p>
-      <p>Once you're in, check #welcome to pick your team role, then <a href="${confirmPageUrl}">confirm your Discord username here</a> so we can manage your access.</p>
       <p>Best,<br/>Easley-Dunn</p>
     `,
   });
