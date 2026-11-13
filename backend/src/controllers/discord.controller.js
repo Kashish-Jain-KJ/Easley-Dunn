@@ -467,7 +467,7 @@ function confirmFormPage(userId) {
   <div class="accent-bar ok"></div>
   <h1>Confirm your Discord username</h1>
   <p>Enter the Discord username you used to join the Easley-Dunn Discord server. This links your account so we can manage your access.</p>
-  <form method="POST" action="/discord/users/${userId}/confirm">
+  <form method="POST" action="${getAppBaseUrl()}/discord/users/${userId}/confirm">
     <label for="username">Discord username</label>
     <input type="text" id="username" name="username" required autofocus />
     <button type="submit" class="ok">Submit</button>
@@ -508,7 +508,7 @@ function confirmErrorPage({ userId, message }) {
   <div class="accent-bar err"></div>
   <h1>Couldn't link your Discord account</h1>
   <p>${message}</p>
-  <a class="btn err" href="/discord/users/${userId}/confirm-page">Try again</a>
+  <a class="btn err" href="${getAppBaseUrl()}/discord/users/${userId}/confirm-page">Try again</a>
 </div>
 </body>
 </html>`;
