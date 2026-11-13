@@ -1,0 +1,18 @@
+node_modules
+.env
+.env.*
+*.log
+logs/
+coverage/
+tests/
+.git
+.DS_Store
+
+# Integration credentials — never baked into the image, mounted at runtime instead
+firebase_json/
+googleplay_json/
+bigquery_json/
+googledrive_json/
+googleanalytics_json/
+apple_key/
+googlecloud_json/
