@@ -2,7 +2,7 @@ import React, { memo } from "react";
 import { Link } from "react-router-dom";
 import { Mail, Users2 } from "lucide-react";
 import { Card } from "./ui/card";
-import { getAvatarColor, getInitials } from "../utils/helpers";
+import { getInitials } from "../utils/helpers";
 
 /**
  * @param {Object} props
@@ -17,12 +17,9 @@ function UserInfoCard({ selectedUser, teams = [] }) {
 
   return (
     <Card className="relative overflow-hidden border border-gray-200/80 shadow-md rounded-3xl bg-white p-6">
-      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-cyan-500 to-indigo-500" />
       <div className="flex items-center gap-5">
         <div
-          className={`size-16 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0 ${getAvatarColor(
-            selectedUser.name
-          )}`}
+          className="size-16 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-xl flex-shrink-0"
         >
           {getInitials(selectedUser.name)}
         </div>
@@ -34,14 +31,14 @@ function UserInfoCard({ selectedUser, teams = [] }) {
             <div
               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                 selectedUser.is_active
-                  ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#16a34a]"
-                  : "bg-[#fdf2f2] border-[#fbc4c4] text-[#dc2626]"
+                  ? "bg-[#f0fdf4] dark:bg-[#04160b] border-[#bbf7d0] dark:border-[#14532d] text-[#16a34a] dark:text-[#4ade80]"
+                  : "bg-[#fdf2f2] dark:bg-[#1a0607] border-[#fbc4c4] dark:border-[#5c1f1f] text-[#dc2626] dark:text-[#f87171]"
               }`}
             >
               {selectedUser.is_active ? (
                 <>
                   <svg
-                    className="size-3.5 text-[#16a34a] flex-shrink-0"
+                    className="size-3.5 text-[#16a34a] dark:text-[#4ade80] flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -58,7 +55,7 @@ function UserInfoCard({ selectedUser, teams = [] }) {
               ) : (
                 <>
                   <svg
-                    className="size-3.5 text-[#dc2626] flex-shrink-0"
+                    className="size-3.5 text-[#dc2626] dark:text-[#f87171] flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"

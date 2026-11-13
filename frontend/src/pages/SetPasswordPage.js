@@ -18,9 +18,10 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ShieldCheck, Lock, RefreshCw, CheckCircle2, AlertCircle, LogOut, Eye, EyeOff } from "lucide-react";
+import { Lock, RefreshCw, CheckCircle2, AlertCircle, LogOut, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import PasswordRules from "../components/PasswordRules";
+import Logo from "../components/Logo";
 import { MIN_LENGTH, passwordRules, passwordIsValid } from "../utils/passwordPolicy";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
@@ -102,12 +103,10 @@ export default function SetPasswordPage({ mode = "invite" }) {
   const card = "w-full max-w-[420px] bg-white border border-slate-200 rounded-2xl shadow-sm p-6";
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-100 dark:bg-black flex items-center justify-center p-6">
       <div className="flex flex-col items-center gap-4">
         <div className="flex items-center gap-2.5 text-slate-900">
-          <span className="w-9 h-9 rounded-[10px] bg-blue-600 text-white flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5" />
-          </span>
+          <Logo className="w-9 h-9" />
           <span className="font-bold">Easley-Dunn Cerberus</span>
         </div>
 

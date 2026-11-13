@@ -14,7 +14,8 @@
 
 import React, { memo } from "react";
 import { NavLink } from "react-router-dom";
-import { Users, Users2, ScrollText, ShieldCheck, KeyRound } from "lucide-react";
+import { Users, Users2, ScrollText, KeyRound } from "lucide-react";
+import Logo from "./Logo";
 
 export const SECTIONS = [
   // Overview is out of the rail until it has something on it: it was the first
@@ -42,11 +43,8 @@ function Sidebar({ sections }) {
       aria-label="Sections"
       className="flex flex-row md:flex-col items-center gap-1 flex-shrink-0 w-full md:w-[76px] px-3 py-2 md:px-0 md:py-3.5 bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-x-auto scroll-soft"
     >
-      <div
-        aria-hidden="true"
-        className="w-10 h-10 mr-2 md:mr-0 md:mb-3 rounded-[10px] bg-blue-600 text-white flex items-center justify-center flex-shrink-0"
-      >
-        <ShieldCheck className="w-[22px] h-[22px]" />
+      <div className="w-10 h-10 mr-2 md:mr-0 md:mb-3 flex items-center justify-center flex-shrink-0">
+        <Logo className="w-9 h-9 text-slate-900" />
       </div>
 
       {sections.map(({ to, label, Icon }) => (
@@ -57,8 +55,8 @@ function Sidebar({ sections }) {
           className={({ isActive }) =>
             `w-16 min-h-[56px] flex-shrink-0 flex flex-col items-center justify-center gap-1 rounded-[10px] no-underline transition-colors ${
               isActive
-                ? "bg-[#ECEAE4] text-slate-900 font-semibold"
-                : "text-slate-600 hover:bg-[#F5F4F1]"
+                ? "bg-[#ECEAE4] dark:bg-[#1c1c1c] text-slate-900 font-semibold"
+                : "text-slate-600 hover:bg-[#F5F4F1] dark:hover:bg-[#111111]"
             }`
           }
         >

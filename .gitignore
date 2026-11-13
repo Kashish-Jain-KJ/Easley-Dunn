@@ -13,3 +13,5 @@
 # for everyone who clones the repo.
 docker-compose.override.yml
 
+# Dependencies — installed by npm, never committed
+node_modules/

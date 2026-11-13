@@ -33,9 +33,9 @@ function OffboardAccessCard({
 
   return (
     <Card className="flex flex-col h-full border border-gray-200/80 shadow-md rounded-3xl overflow-hidden bg-white">
-      <CardHeader className="bg-[#fff8f8] border-b border-[#fce3e3] pb-5 pt-6 px-6">
+      <CardHeader className="bg-[#fff8f8] dark:bg-[#140506] border-b border-[#fce3e3] dark:border-[#3a1215] pb-5 pt-6 px-6">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-[#fdebeb] rounded-2xl text-[#d91e36] flex items-center justify-center shadow-xs">
+          <div className="p-3 bg-[#fdebeb] dark:bg-[#2a0b0f] rounded-2xl text-[#d91e36] dark:text-[#f87171] flex items-center justify-center shadow-xs">
             <UserMinus className="size-6" />
           </div>
           <div>
@@ -47,11 +47,11 @@ function OffboardAccessCard({
       <CardContent className="pt-6 px-6 flex-1 flex flex-col">
         {isAccessLoading ? (
           <div className="py-24 flex justify-center text-gray-500 flex-1 items-center">
-            <Loader2 className="animate-spin size-10 text-[#d91e36]" />
+            <Loader2 className="animate-spin size-10 text-[#d91e36] dark:text-[#f87171]" />
           </div>
         ) : !selectedUser.is_active ? (
           <div className="py-12 flex flex-col items-center justify-center text-center flex-grow">
-            <div className="p-4 bg-[#fdebeb] text-[#d91e36] rounded-3xl flex items-center justify-center shadow-xs">
+            <div className="p-4 bg-[#fdebeb] dark:bg-[#2a0b0f] text-[#d91e36] dark:text-[#f87171] rounded-3xl flex items-center justify-center shadow-xs">
               <XCircle className="size-10" />
             </div>
             <h4 className="font-bold text-gray-900 text-lg mt-5">User is Inactive</h4>
@@ -61,7 +61,7 @@ function OffboardAccessCard({
           </div>
         ) : (
           <Tabs defaultValue="automate" className="w-full flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] p-1 rounded-2xl h-12">
+            <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] dark:bg-[#161616] p-1 rounded-2xl h-12">
               <TabsTrigger
                 value="automate"
                 className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all"

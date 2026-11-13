@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <style>.f{stroke:#000}@media (prefers-color-scheme: dark){.f{stroke:#fff}}</style>
+  <g class="f" fill="none" stroke-width="10">
+    <polyline points="12,37 12,27 50,5 88,27 88,37"/>
+    <polyline points="12,63 12,73 50,95 88,73 88,63"/>
+  </g>
+  <g fill="#E11D1D">
+    <polygon points="16,38 47,51 23,56"/>
+    <polygon points="84,38 53,51 77,56"/>
+  </g>
+</svg>

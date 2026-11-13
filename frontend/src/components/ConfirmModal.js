@@ -28,7 +28,7 @@ export default function ConfirmModal({
         <div className="flex justify-start">
           <div
             className={`p-4 rounded-[22px] flex items-center justify-center shadow-xs ${
-              type === "onboard" ? "bg-[#e6f6ee] text-[#10a353]" : "bg-[#fdebeb] text-[#d91e36]"
+              type === "onboard" ? "bg-[#e6f6ee] dark:bg-[#062016] text-[#10a353]" : "bg-[#fdebeb] dark:bg-[#2a0b0f] text-[#d91e36] dark:text-[#f87171]"
             }`}
           >
             {type === "onboard" ? <UserPlus className="size-7" /> : <UserMinus className="size-7" />}
@@ -49,7 +49,7 @@ export default function ConfirmModal({
         </div>
 
         {/* Permissions List container */}
-        <div className="bg-[#f8f9fa] rounded-2xl p-5 border border-gray-100 max-h-[220px] overflow-y-auto">
+        <div className="bg-[#f8f9fa] dark:bg-[#0c0c0c] rounded-2xl p-5 border border-gray-100 max-h-[220px] overflow-y-auto">
           <ul className="space-y-3">
             {permissions?.map((name, idx) => (
               <li key={idx} className="flex items-center gap-3 text-[15px] font-semibold text-gray-700">

@@ -21,17 +21,17 @@ import { summarize } from "../utils/connectorResults";
 
 const STYLES = {
   ok: {
-    panel: "bg-[#f0fdf4] border-[#bbf7d0] text-[#15803d]",
+    panel: "bg-[#f0fdf4] dark:bg-[#04160b] border-[#bbf7d0] dark:border-[#14532d] text-[#15803d] dark:text-[#4ade80]",
     badge: "bg-[#16a34a]",
     glyph: "✓",
   },
   partial: {
-    panel: "bg-[#fffbeb] border-[#fde68a] text-[#b45309]",
+    panel: "bg-[#fffbeb] dark:bg-[#1a1205] border-[#fde68a] dark:border-[#5a420d] text-[#b45309] dark:text-[#fbbf24]",
     badge: "bg-[#d97706]",
     glyph: "!",
   },
   failed: {
-    panel: "bg-[#fdf2f2] border-[#fbc4c4] text-[#9b1c1c]",
+    panel: "bg-[#fdf2f2] dark:bg-[#1a0607] border-[#fbc4c4] dark:border-[#5c1f1f] text-[#9b1c1c] dark:text-[#fca5a5]",
     badge: "bg-[#d91e36]",
     glyph: "!",
   },
@@ -69,7 +69,7 @@ export default function ToastContainer({ toasts, onCloseToast }) {
               <h4 className="font-bold text-[15px] leading-tight text-gray-900">{toast.title}</h4>
 
               {state === "partial" ? (
-                <p className="text-xs font-semibold text-[#b45309] mt-1">
+                <p className="text-xs font-semibold text-[#b45309] dark:text-[#fbbf24] mt-1">
                   {okCount} of {total} went through. {failCount} did not — see below.
                 </p>
               ) : (

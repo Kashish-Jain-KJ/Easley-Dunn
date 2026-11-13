@@ -36,22 +36,3 @@ export const getInitials = (name) => {
   const last = parts[parts.length - 1]?.charAt(0) || "";
   return (first + last).toUpperCase();
 };
-
-export const getAvatarColor = (name) => {
-  if (!name) return "bg-[#2563eb] text-white";
-  const colors = [
-    "bg-[#2563eb] text-white", // Blue
-    "bg-[#059669] text-white", // Green
-    "bg-[#d97706] text-white", // Amber/Orange
-    "bg-[#e11d48] text-white", // Rose/Pink-Red
-    "bg-[#4f46e5] text-white", // Indigo
-    "bg-[#7c3aed] text-white", // Purple
-    "bg-[#db2777] text-white", // Pink
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
-};

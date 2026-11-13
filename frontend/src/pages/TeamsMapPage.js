@@ -380,7 +380,7 @@ export default function TeamsMapPage() {
 
       {picked && (
         <div className="fixed inset-0 z-50 bg-slate-900/45 flex items-start justify-center px-4 pt-24 pb-4">
-          <div role="dialog" aria-modal="true" aria-label="Add to a team" className="w-full max-w-[440px] bg-white rounded-2xl shadow-2xl p-5 flex flex-col gap-3.5">
+          <div role="dialog" aria-modal="true" aria-label="Add to a team" className="w-full max-w-[440px] bg-white rounded-2xl shadow-2xl dark:border dark:border-slate-300 p-5 flex flex-col gap-3.5">
             <div className="flex items-center gap-2.5">
               <Avatar id={picked.user_id} name={fullName(picked)} size={40} />
               <div className="min-w-0">

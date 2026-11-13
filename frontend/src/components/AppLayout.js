@@ -19,6 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import LoginPage from "./LoginPage";
 import ResetPasswordModal from "./ResetPasswordModal";
 import Sidebar, { sectionsFor } from "./Sidebar";
+import ThemeToggle from "./ThemeToggle";
 
 const TITLES = {
   "/overview": ["Overview", "What needs attention today"],
@@ -47,6 +48,7 @@ function TopBar({ title, subtitle }) {
       </div>
 
       <div className="flex items-center gap-2.5">
+        <ThemeToggle />
         <div className="flex items-center gap-2.5 min-h-[44px] pl-1 pr-3 py-1 border border-slate-200 rounded-full">
           <span className="w-[34px] h-[34px] rounded-full bg-blue-900 text-white flex items-center justify-center text-xs font-semibold">
             {initials(user?.name, user?.email)}
@@ -101,7 +103,7 @@ export default function AppLayout() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-black flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
           <p className="text-sm font-medium text-slate-600">Verifying session...</p>
@@ -117,7 +119,7 @@ export default function AppLayout() {
   return (
     // overflow-hidden matters: a wrapped flex line is sized by its content, so
     // without it the whole console scrolls instead of the pane inside it.
-    <div className="h-screen overflow-hidden flex flex-wrap bg-slate-100 text-slate-900">
+    <div className="h-screen overflow-hidden flex flex-wrap bg-slate-100 dark:bg-black text-slate-900">
       {sections.length > 0 && <Sidebar sections={sections} />}
       <div className="flex-1 h-full min-w-0 min-h-0 flex flex-col basis-[560px] grow-[999]">
         <TopBar title={title} subtitle={subtitle} />

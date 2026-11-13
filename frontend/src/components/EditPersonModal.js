@@ -53,7 +53,7 @@ export default function EditPersonModal({ person, teamNames, onClose, onSaved })
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/45 flex items-start justify-center px-4 pt-24 pb-4">
-      <div role="dialog" aria-modal="true" aria-label="Edit user details" className="w-full max-w-[460px] bg-white rounded-2xl shadow-2xl p-5 flex flex-col gap-4">
+      <div role="dialog" aria-modal="true" aria-label="Edit user details" className="w-full max-w-[460px] bg-white rounded-2xl shadow-2xl dark:border dark:border-slate-300 p-5 flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="m-0 text-lg font-bold text-slate-900">Edit user details</h2>

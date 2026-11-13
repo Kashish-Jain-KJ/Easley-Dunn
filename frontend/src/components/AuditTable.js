@@ -217,7 +217,7 @@ export default function AuditTable({
                 aria-selected={category === c.id}
                 onClick={() => setCategory(c.id)}
                 className={`h-8 px-2.5 rounded-md text-[13px] font-medium cursor-pointer ${
-                  category === c.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-200/70"
+                  category === c.id ? "bg-slate-900 text-white dark:bg-[#f2f2f2] dark:text-black" : "text-slate-600 hover:bg-slate-200/70"
                 }`}
               >
                 {c.label}

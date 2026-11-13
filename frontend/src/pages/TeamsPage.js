@@ -734,7 +734,7 @@ function Dialog({ dialog, team, candidates, personQuery, setPersonQuery, draft, 
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/45 flex items-start justify-center px-4 pt-24 pb-4">
-      <div role="dialog" aria-modal="true" className="w-full max-w-[480px] bg-white rounded-2xl shadow-2xl p-5 flex flex-col gap-3.5">
+      <div role="dialog" aria-modal="true" className="w-full max-w-[480px] bg-white rounded-2xl shadow-2xl dark:border dark:border-slate-300 p-5 flex flex-col gap-3.5">
         {body()}
       </div>
     </div>

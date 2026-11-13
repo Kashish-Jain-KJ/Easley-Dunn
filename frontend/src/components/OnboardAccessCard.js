@@ -30,9 +30,9 @@ function OnboardAccessCard({
 
   return (
     <Card className="flex flex-col h-full border border-gray-200/80 shadow-md rounded-3xl overflow-hidden bg-white">
-      <CardHeader className="bg-[#f2faf5] border-b border-[#e2f0e8] pb-5 pt-6 px-6">
+      <CardHeader className="bg-[#f2faf5] dark:bg-[#04140d] border-b border-[#e2f0e8] dark:border-[#0f2a1c] pb-5 pt-6 px-6">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-[#e6f6ee] rounded-2xl text-[#10a353] flex items-center justify-center shadow-xs">
+          <div className="p-3 bg-[#e6f6ee] dark:bg-[#062016] rounded-2xl text-[#10a353] flex items-center justify-center shadow-xs">
             <UserPlus className="size-6" />
           </div>
           <div>
@@ -48,7 +48,7 @@ function OnboardAccessCard({
           </div>
         ) : !selectedUser.is_active ? (
           <div className="py-12 flex flex-col items-center justify-center text-center flex-grow">
-            <div className="p-4 bg-[#fdebeb] text-[#d91e36] rounded-3xl flex items-center justify-center shadow-xs">
+            <div className="p-4 bg-[#fdebeb] dark:bg-[#2a0b0f] text-[#d91e36] dark:text-[#f87171] rounded-3xl flex items-center justify-center shadow-xs">
               <XCircle className="size-10" />
             </div>
             <h4 className="font-bold text-gray-900 text-lg mt-5">User is Inactive</h4>
@@ -58,7 +58,7 @@ function OnboardAccessCard({
           </div>
         ) : (
           <Tabs defaultValue="automate" className="w-full flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] p-1 rounded-2xl h-12">
+            <TabsList className="grid w-full grid-cols-2 bg-[#f3f4f6] dark:bg-[#161616] p-1 rounded-2xl h-12">
               <TabsTrigger
                 value="automate"
                 className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900 text-gray-500 font-semibold text-sm transition-all"

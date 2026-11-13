@@ -100,7 +100,7 @@ export default function AddPersonModal({ teams = [], onClose, onAdded, onTeamsCh
   if (fallbackLink) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-900/45 flex items-start justify-center px-4 pt-24 pb-4">
-        <div role="dialog" aria-modal="true" aria-label="Invite could not be emailed" className="w-full max-w-[520px] bg-white rounded-2xl shadow-2xl p-5 flex flex-col gap-3.5">
+        <div role="dialog" aria-modal="true" aria-label="Invite could not be emailed" className="w-full max-w-[520px] bg-white rounded-2xl shadow-2xl dark:border dark:border-slate-300 p-5 flex flex-col gap-3.5">
           <h2 className="m-0 text-lg font-bold text-slate-900">{name || email} was added</h2>
           <p className="m-0 text-sm text-slate-700">
             The invite email could not be sent, so pass this link on yourself. It works once and expires in seven days.
@@ -133,7 +133,7 @@ export default function AddPersonModal({ teams = [], onClose, onAdded, onTeamsCh
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/45 flex items-start justify-center px-4 pt-24 pb-4">
-      <div role="dialog" aria-modal="true" aria-label="Add user" className="w-full max-w-[460px] bg-white rounded-2xl shadow-2xl p-5 flex flex-col gap-4">
+      <div role="dialog" aria-modal="true" aria-label="Add user" className="w-full max-w-[460px] bg-white rounded-2xl shadow-2xl dark:border dark:border-slate-300 p-5 flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="m-0 text-lg font-bold text-slate-900">Add user</h2>

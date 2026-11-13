@@ -62,7 +62,7 @@ export default function Toasts({ toasts, onDismiss }) {
               type="button"
               onClick={() => onDismiss(t.id)}
               aria-label="Dismiss"
-              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-black/5 cursor-pointer"
+              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
